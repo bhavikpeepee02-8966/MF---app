@@ -1,0 +1,10 @@
+{
+  "name": "મ્યુચ્યુઅલ ફંડ ચોપડી",
+  "short_name": "MF ચોપડી",
+  "description": "Mutual fund SIP/Lumpsum tracker with live NAV, XIRR and growth chart",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#F1E7D0",
+  "theme_color": "#7A2331",
+  "orientation": "portrait"
+}

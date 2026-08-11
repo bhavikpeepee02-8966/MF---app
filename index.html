@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>મ્યુચ્યુઅલ ફંડ ચોપડી</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700;900&family=Noto+Sans+Gujarati:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --maroon:#7A2331;
+    --maroon-dark:#4E1620;
+    --maroon-deep:#3A1017;
+    --ivory:#F1E7D0;
+    --ivory-soft:#FAF5E8;
+    --paper:#FDFBF4;
+    --ink:#2B2320;
+    --ink-soft:#5B4F45;
+    --gold:#B8892B;
+    --gold-bright:#D6A93F;
+    --green:#3F7D58;
+    --green-bg:#E7F1EA;
+    --red:#B23A2E;
+    --red-bg:#F7E9E7;
+    --line:#E3D6B8;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--ivory-soft);
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(122,35,49,0.05) 1px, transparent 0);
+    background-size: 22px 22px;
+    color:var(--ink);
+    font-family:'Noto Sans Gujarati','IBM Plex Mono',sans-serif;
+    min-height:100vh;
+    padding-bottom:60px;
+  }
+  h1,h2,h3,.display{font-family:'Fraunces','Noto Sans Gujarati',serif;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+
+  /* ===== Header — ledger cover ===== */
+  header.cover{
+    background:linear-gradient(155deg, var(--maroon) 0%, var(--maroon-dark) 55%, var(--maroon-deep) 100%);
+    color:var(--ivory);
+    padding:28px 20px 34px;
+    position:relative;
+    overflow:hidden;
+    box-shadow:0 6px 18px rgba(58,16,23,0.35);
+  }
+  header.cover::before{
+    content:"";
+    position:absolute; left:0; top:0; bottom:0; width:14px;
+    background-repeat:repeat-y;
+    background-image: repeating-linear-gradient(
+      to bottom, transparent 0 6px, var(--gold-bright) 6px 9px, transparent 9px 20px
+    );
+    opacity:0.75;
+  }
+  header.cover .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--gold-bright); margin-left:22px; margin-bottom:4px;
+  }
+  header.cover h1{
+    margin:0 0 4px 22px; font-size:26px; font-weight:700; letter-spacing:.01em;
+  }
+  header.cover p{
+    margin:0 0 0 22px; font-size:13px; color:#E6C9CE; font-family:'Noto Sans Gujarati',sans-serif;
+  }
+
+  /* ===== Tabs ===== */
+  nav.tabs{
+    display:flex; gap:0; margin:-18px 14px 0; position:relative; z-index:2;
+    background:var(--paper); border-radius:12px; padding:5px;
+    box-shadow:0 8px 20px rgba(58,16,23,0.18);
+    border:1px solid var(--line);
+  }
+  nav.tabs button{
+    flex:1; border:none; background:transparent; padding:11px 6px;
+    font-family:'Noto Sans Gujarati',sans-serif; font-weight:600; font-size:13.5px;
+    color:var(--ink-soft); border-radius:9px; cursor:pointer; transition:.15s;
+  }
+  nav.tabs button.active{ background:var(--maroon); color:var(--ivory); }
+
+  main{ max-width:640px; margin:0 auto; padding:20px 14px 0; }
+  section.tab{ display:none; }
+  section.tab.active{ display:block; animation:fade .25s ease; }
+  @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+
+  /* ===== Summary strip ===== */
+  .summary{
+    display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;
+  }
+  .summary .card{
+    background:var(--paper); border:1px solid var(--line); border-radius:12px;
+    padding:14px; position:relative;
+  }
+  .summary .card .lbl{ font-size:11.5px; color:var(--ink-soft); margin-bottom:4px; }
+  .summary .card .val{ font-family:'IBM Plex Mono',monospace; font-size:19px; font-weight:600; }
+  .summary .card.wide{ grid-column:1/3; display:flex; justify-content:space-between; align-items:center; }
+  .pill{ font-size:11.5px; padding:3px 9px; border-radius:20px; font-weight:600; font-family:'IBM Plex Mono',monospace; }
+  .pill.pos{ background:var(--green-bg); color:var(--green); }
+  .pill.neg{ background:var(--red-bg); color:var(--red); }
+
+  .chart-wrap{
+    background:var(--paper); border:1px solid var(--line); border-radius:12px;
+    padding:14px 10px 6px; margin-bottom:18px;
+  }
+  .chart-wrap h3{ margin:0 0 8px 6px; font-size:14px; }
+  .chart-wrap canvas{ max-height:210px; }
+
+  /* ===== Fund card — ledger entry ===== */
+  .fund-card{
+    background:var(--paper); border:1px solid var(--line); border-radius:12px;
+    margin-bottom:14px; padding:14px 14px 14px 20px; position:relative; overflow:hidden;
+  }
+  .fund-card::before{
+    content:""; position:absolute; left:0; top:0; bottom:0; width:8px;
+    background-repeat:repeat-y; background-position:center;
+    background-image: repeating-linear-gradient(to bottom, transparent 0 5px, var(--gold) 5px 7px, transparent 7px 16px);
+  }
+  .fund-card.stopped{ opacity:.68; }
+  .fund-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .fund-head .name{ font-family:'Fraunces',serif; font-weight:700; font-size:16px; line-height:1.25; }
+  .fund-head .code{ font-size:11px; color:var(--ink-soft); font-family:'IBM Plex Mono',monospace; }
+  .badge{
+    font-size:10.5px; font-weight:700; letter-spacing:.04em; padding:4px 9px; border-radius:20px;
+    border:1.5px solid var(--gold); color:var(--maroon-dark); background:var(--ivory); white-space:nowrap;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .badge.stopped-badge{ border-color:#a89f8f; color:#8a8072; }
+
+  .fund-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:8px 12px; margin:12px 0 8px;
+    font-size:12.5px;
+  }
+  .fund-grid .lbl{ color:var(--ink-soft); }
+  .fund-grid .val{ font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:13.5px; }
+  .fund-grid .val.gain{ color:var(--green); }
+  .fund-grid .val.loss{ color:var(--red); }
+
+  .nav-line{ font-size:11.5px; color:var(--ink-soft); margin:6px 0 10px; }
+  .nav-line b{ color:var(--ink); font-family:'IBM Plex Mono',monospace; }
+
+  textarea.comment{
+    width:100%; border:1px dashed var(--line); border-radius:8px; background:var(--ivory-soft);
+    padding:8px 10px; font-family:'Noto Sans Gujarati',sans-serif; font-size:12.5px; color:var(--ink);
+    resize:vertical; min-height:36px;
+  }
+  .fund-actions{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .fund-actions button{
+    font-size:12px; font-weight:600; padding:7px 11px; border-radius:8px; cursor:pointer;
+    font-family:'Noto Sans Gujarati',sans-serif; border:1px solid var(--line); background:var(--ivory-soft); color:var(--ink);
+  }
+  .fund-actions button.danger{ color:var(--red); border-color:var(--red-bg); }
+  .fund-actions button.primary{ background:var(--maroon); color:var(--ivory); border-color:var(--maroon); }
+
+  .empty{
+    text-align:center; padding:40px 20px; color:var(--ink-soft); font-size:13.5px;
+  }
+
+  /* ===== Forms ===== */
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:12.5px; font-weight:600; margin-bottom:5px; color:var(--ink-soft); }
+  .field input, .field select{
+    width:100%; padding:10px 11px; border:1px solid var(--line); border-radius:9px;
+    font-family:'IBM Plex Mono',monospace; font-size:14px; background:var(--paper); color:var(--ink);
+  }
+  .field.gu input, .field.gu textarea{ font-family:'Noto Sans Gujarati',sans-serif; }
+  .radio-row{ display:flex; gap:10px; }
+  .radio-row label{
+    flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
+    border:1.5px solid var(--line); border-radius:9px; padding:10px; cursor:pointer;
+    font-size:13px; font-weight:600; color:var(--ink-soft); font-family:'Noto Sans Gujarati',sans-serif;
+  }
+  .radio-row input{ width:auto; }
+  .radio-row label.checked{ border-color:var(--maroon); color:var(--maroon); background:var(--red-bg); }
+
+  .search-box{ position:relative; margin-bottom:10px; }
+  .search-results{
+    background:var(--paper); border:1px solid var(--line); border-radius:10px; margin-top:6px;
+    max-height:260px; overflow-y:auto;
+  }
+  .search-results .item{ padding:10px 12px; border-bottom:1px solid var(--line); cursor:pointer; font-size:13px; }
+  .search-results .item:hover{ background:var(--ivory-soft); }
+  .search-results .item .code{ font-size:10.5px; color:var(--ink-soft); font-family:'IBM Plex Mono',monospace; }
+  .selected-scheme{
+    background:var(--ivory-soft); border:1.5px solid var(--gold); border-radius:10px; padding:12px;
+    margin-bottom:14px; font-size:13px;
+  }
+  .btn-block{
+    width:100%; padding:13px; border:none; border-radius:10px; background:var(--maroon); color:var(--ivory);
+    font-weight:700; font-size:14.5px; cursor:pointer; font-family:'Noto Sans Gujarati',sans-serif;
+    margin-top:6px;
+  }
+  .btn-block:disabled{ opacity:.5; }
+  .btn-secondary{
+    width:100%; padding:11px; border:1.5px solid var(--maroon); border-radius:10px; background:transparent;
+    color:var(--maroon); font-weight:700; font-size:13.5px; cursor:pointer; font-family:'Noto Sans Gujarati',sans-serif;
+    margin-top:8px;
+  }
+  .status-msg{ font-size:12.5px; padding:10px 12px; border-radius:9px; margin:10px 0; }
+  .status-msg.err{ background:var(--red-bg); color:var(--red); }
+  .status-msg.ok{ background:var(--green-bg); color:var(--green); }
+
+  .calc-result{
+    background:var(--ivory-soft); border:1.5px dashed var(--gold); border-radius:12px; padding:16px; margin-top:16px;
+  }
+  .calc-result .row{ display:flex; justify-content:space-between; padding:6px 0; font-size:13px; border-bottom:1px solid var(--line); }
+  .calc-result .row:last-child{ border-bottom:none; }
+  .calc-result .row .v{ font-family:'IBM Plex Mono',monospace; font-weight:700; }
+
+  h3.section-title{ font-size:14.5px; margin:22px 0 10px 4px; color:var(--maroon-dark); }
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <div class="eyebrow">Pragji Premji &amp; Sons</div>
+  <h1>મ્યુચ્યુઅલ ફંડ ચોપડી</h1>
+  <p>રોકાણનો હિસાબ — SIP, Lumpsum, NAV અને XIRR એક જ જગ્યાએ</p>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="dashboard">પોર્ટફોલિયો</button>
+  <button class="tab-btn" data-tab="add">ફંડ ઉમેરો</button>
+  <button class="tab-btn" data-tab="calc">SIP કેલ્ક્યુલેટર</button>
+</nav>
+
+<main>
+
+  <!-- ============ DASHBOARD ============ -->
+  <section class="tab active" id="tab-dashboard">
+    <div id="dash-status"></div>
+
+    <div class="summary" id="summary-block" style="display:none;">
+      <div class="card">
+        <div class="lbl">કુલ રોકાણ</div>
+        <div class="val" id="s-invested">₹0</div>
+      </div>
+      <div class="card">
+        <div class="lbl">વર્તમાન કિંમત</div>
+        <div class="val" id="s-current">₹0</div>
+      </div>
+      <div class="card wide">
+        <div>
+          <div class="lbl">નફો / ખોટ</div>
+          <div class="val" id="s-gain">₹0</div>
+        </div>
+        <span class="pill" id="s-gain-pct">0%</span>
+      </div>
+      <div class="card wide">
+        <div class="lbl">પોર્ટફોલિયો XIRR (વાર્ષિક વળતર)</div>
+        <div class="val" id="s-xirr">—</div>
+      </div>
+    </div>
+
+    <div class="chart-wrap" id="chart-block" style="display:none;">
+      <h3>ગ્રોથ — સમય મુજબ કુલ કિંમત</h3>
+      <canvas id="growthChart"></canvas>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-bottom:14px;">
+      <button class="btn-secondary" style="margin-top:0;" onclick="refreshAllFunds()">🔄 બધા NAV તાજા કરો</button>
+    </div>
+
+    <div id="fund-list"></div>
+    <div class="empty" id="empty-state">
+      હજુ કોઈ ફંડ ઉમેર્યું નથી.<br>ઉપર "ફંડ ઉમેરો" ટેબમાં જઈને પહેલું ફંડ ઉમેરો.
+    </div>
+  </section>
+
+  <!-- ============ ADD FUND ============ -->
+  <section class="tab" id="tab-add">
+    <h3 class="section-title">યોજના શોધો</h3>
+    <div class="search-box">
+      <div class="field gu" style="margin-bottom:0;">
+        <input type="text" id="search-input" placeholder="દા.ત. HDFC Mid Cap, Nippon Growth...">
+      </div>
+      <div class="search-results" id="search-results" style="display:none;"></div>
+    </div>
+
+    <div id="selected-scheme-block"></div>
+
+    <div id="add-form-block" style="display:none;">
+      <h3 class="section-title">રોકાણ પ્રકાર</h3>
+      <div class="radio-row" id="type-radio">
+        <label class="checked"><input type="radio" name="itype" value="lumpsum" checked> Lumpsum</label>
+        <label><input type="radio" name="itype" value="sip"> SIP</label>
+      </div>
+
+      <div id="lumpsum-fields">
+        <div class="field">
+          <label>રોકાણ તારીખ</label>
+          <input type="date" id="ls-date">
+        </div>
+        <div class="field">
+          <label>રોકાણ રકમ (₹)</label>
+          <input type="number" id="ls-amount" placeholder="50000">
+        </div>
+      </div>
+
+      <div id="sip-fields" style="display:none;">
+        <div class="field">
+          <label>માસિક SIP રકમ (₹)</label>
+          <input type="number" id="sip-amount" placeholder="5000">
+        </div>
+        <div class="field">
+          <label>શરૂઆત તારીખ</label>
+          <input type="date" id="sip-start">
+        </div>
+        <div class="field">
+          <label>દર મહિને તારીખ (1-28)</label>
+          <input type="number" id="sip-day" min="1" max="28" value="5">
+        </div>
+        <div class="field">
+          <label>સ્થિતિ</label>
+          <select id="sip-status">
+            <option value="active">ચાલુ છે (Active)</option>
+            <option value="stopped">બંધ કરેલ (Stopped)</option>
+          </select>
+        </div>
+        <div class="field" id="sip-stop-date-field" style="display:none;">
+          <label>બંધ કરવાની તારીખ</label>
+          <input type="date" id="sip-stop-date">
+        </div>
+      </div>
+
+      <div class="field gu">
+        <label>નોંધ / Comment (વૈકલ્પિક)</label>
+        <textarea id="fund-comment" class="comment" placeholder="યાદ રાખવા માટે કંઈ પણ લખો..."></textarea>
+      </div>
+
+      <button class="btn-block" id="save-fund-btn" onclick="saveFund()">ફંડ ટ્રેકિંગમાં ઉમેરો</button>
+      <div id="add-status"></div>
+    </div>
+  </section>
+
+  <!-- ============ SIP CALCULATOR ============ -->
+  <section class="tab" id="tab-calc">
+    <h3 class="section-title">SIP ભવિષ્ય મૂલ્ય કેલ્ક્યુલેટર</h3>
+    <div class="field">
+      <label>માસિક રોકાણ (₹)</label>
+      <input type="number" id="calc-monthly" value="5000">
+    </div>
+    <div class="field">
+      <label>અંદાજિત વાર્ષિક વળતર (%)</label>
+      <input type="number" id="calc-return" value="12">
+    </div>
+    <div class="field">
+      <label>સમયગાળો (વર્ષ)</label>
+      <input type="number" id="calc-years" value="10">
+    </div>
+    <button class="btn-block" onclick="runSipCalc()">ગણતરી કરો</button>
+    <div class="calc-result" id="sip-calc-result" style="display:none;"></div>
+
+    <h3 class="section-title">Lumpsum ભવિષ્ય મૂલ્ય કેલ્ક્યુલેટર</h3>
+    <div class="field">
+      <label>એક વખતનું રોકાણ (₹)</label>
+      <input type="number" id="ls-calc-amount" value="100000">
+    </div>
+    <div class="field">
+      <label>અંદાજિત વાર્ષિક વળતર (%)</label>
+      <input type="number" id="ls-calc-return" value="12">
+    </div>
+    <div class="field">
+      <label>સમયગાળો (વર્ષ)</label>
+      <input type="number" id="ls-calc-years" value="10">
+    </div>
+    <button class="btn-block" onclick="runLumpsumCalc()">ગણતરી કરો</button>
+    <div class="calc-result" id="ls-calc-result" style="display:none;"></div>
+  </section>
+
+</main>
+
+<script>
+/* =========================================================
+   STORAGE
+   ========================================================= */
+const STORAGE_KEY = 'mf_schemes_v1';
+
+async function loadSchemes(){
+  try{
+    const res = await window.storage.get(STORAGE_KEY, false);
+    return res ? JSON.parse(res.value) : [];
+  }catch(e){ return []; }
+}
+async function saveSchemes(schemes){
+  try{
+    await window.storage.set(STORAGE_KEY, JSON.stringify(schemes), false);
+    return true;
+  }catch(e){ console.error('storage save failed', e); return false; }
+}
+
+/* =========================================================
+   TABS
+   ========================================================= */
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(s=>s.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+  });
+});
+
+/* =========================================================
+   DATE / FORMAT HELPERS
+   ========================================================= */
+function fmtINR(n){
+  if(n===null||n===undefined||isNaN(n)) return '₹0';
+  const neg = n<0; n=Math.abs(n);
+  const fixed = n.toFixed(2);
+  let [intPart, dec] = fixed.split('.');
+  let last3 = intPart.slice(-3);
+  let rest = intPart.slice(0,-3);
+  if(rest !== '') last3 = ',' + last3;
+  rest = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',');
+  return (neg?'-':'') + '₹' + rest + last3 + '.' + dec;
+}
+function fmtDate(d){
+  if(!(d instanceof Date)) d = new Date(d);
+  return d.toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'});
+}
+function parseMfDate(s){
+  // mfapi format: "dd-mm-yyyy"
+  const [d,m,y] = s.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+function toISODate(d){
+  return d.toISOString().slice(0,10);
+}
+
+/* =========================================================
+   XIRR
+   ========================================================= */
+function daysBetween(d1,d2){ return (d2-d1)/(1000*60*60*24); }
+
+function xirr(cashflows){
+  if(cashflows.length<2) return null;
+  const t0 = cashflows[0].date;
+  const years = cashflows.map(cf=>daysBetween(t0,cf.date)/365);
+  let rate = 0.15;
+  for(let iter=0; iter<200; iter++){
+    let f=0, fp=0;
+    for(let i=0;i<cashflows.length;i++){
+      const t=years[i];
+      f += cashflows[i].amount / Math.pow(1+rate, t);
+      fp += -t*cashflows[i].amount / Math.pow(1+rate, t+1);
+    }
+    if(Math.abs(fp)<1e-12) break;
+    const newRate = rate - f/fp;
+    if(!isFinite(newRate)) break;
+    if(Math.abs(newRate-rate)<1e-7){ rate=newRate; break; }
+    rate = newRate;
+    if(rate <= -0.999) rate = -0.999 + 1e-6;
+  }
+  if(!isFinite(rate)) return null;
+  return rate;
+}
+
+/* =========================================================
+   MFAPI.IN CALLS
+   ========================================================= */
+async function searchSchemes(query){
+  const res = await fetch('https://api.mfapi.in/mf/search?q=' + encodeURIComponent(query));
+  if(!res.ok) throw new Error('search failed');
+  const all = await res.json();
+  // Prefer Direct + Growth plans; hide Regular/IDCW variants when a Direct Growth match exists
+  const directGrowth = all.filter(r=>{
+    const n = r.schemeName.toLowerCase();
+    return n.includes('direct') && n.includes('growth');
+  });
+  return directGrowth.length ? directGrowth : all;
+}
+async function getSchemeHistory(code){
+  const res = await fetch('https://api.mfapi.in/mf/' + code);
+  if(!res.ok) throw new Error('history fetch failed');
+  const data = await res.json();
+  // data.data is descending by date; build ascending array with Date objects + numeric nav
+  const asc = data.data.map(x=>({date: parseMfDate(x.date), nav: parseFloat(x.nav)})).reverse();
+  return { meta: data.meta, historyAsc: asc };
+}
+function findNavOnOrBefore(historyAsc, targetDate){
+  let lo=0, hi=historyAsc.length-1, ans=null;
+  while(lo<=hi){
+    const mid=(lo+hi)>>1;
+    if(historyAsc[mid].date <= targetDate){ ans = historyAsc[mid]; lo=mid+1; }
+    else hi=mid-1;
+  }
+  return ans;
+}
+
+/* =========================================================
+   SIP INSTALLMENT GENERATION
+   ========================================================= */
+function generateSipInstallments(startDate, dayOfMonth, endDate, amount, historyAsc){
+  const installments = [];
+  let cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  const hardEnd = new Date(endDate);
+  while(cursor <= hardEnd){
+    const lastDay = new Date(cursor.getFullYear(), cursor.getMonth()+1, 0).getDate();
+    const day = Math.min(dayOfMonth, lastDay);
+    const instDate = new Date(cursor.getFullYear(), cursor.getMonth(), day);
+    if(instDate >= startDate && instDate <= hardEnd){
+      const navEntry = findNavOnOrBefore(historyAsc, instDate);
+      if(navEntry){
+        installments.push({date: instDate, amount: amount, units: amount/navEntry.nav, nav: navEntry.nav});
+      }
+    }
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1);
+  }
+  return installments;
+}
+
+/* =========================================================
+   ADD FUND TAB LOGIC
+   ========================================================= */
+let selectedScheme = null; // {schemeCode, schemeName}
+let searchTimer = null;
+
+document.getElementById('search-input').addEventListener('input', (e)=>{
+  clearTimeout(searchTimer);
+  const q = e.target.value.trim();
+  const box = document.getElementById('search-results');
+  if(q.length < 3){ box.style.display='none'; box.innerHTML=''; return; }
+  searchTimer = setTimeout(async ()=>{
+    box.innerHTML = '<div class="item">શોધી રહ્યા છીએ...</div>';
+    box.style.display = 'block';
+    try{
+      const results = await searchSchemes(q);
+      if(!results.length){
+        box.innerHTML = '<div class="item">કંઈ મળ્યું નહીં. બીજું નામ અજમાવો.</div>';
+        return;
+      }
+      box.innerHTML = results.slice(0,25).map(r=>
+        `<div class="item" data-code="${r.schemeCode}" data-name="${r.schemeName.replace(/"/g,'&quot;')}">
+          ${r.schemeName}<div class="code">Code: ${r.schemeCode}</div>
+        </div>`
+      ).join('');
+      box.querySelectorAll('.item[data-code]').forEach(el=>{
+        el.addEventListener('click', ()=>{
+          selectedScheme = { schemeCode: el.dataset.code, schemeName: el.dataset.name };
+          document.getElementById('selected-scheme-block').innerHTML =
+            `<div class="selected-scheme"><b>પસંદ કરેલ યોજના:</b><br>${selectedScheme.schemeName}<br>
+             <span class="mono" style="font-size:11px;color:var(--ink-soft);">Code: ${selectedScheme.schemeCode}</span></div>`;
+          document.getElementById('add-form-block').style.display = 'block';
+          box.style.display = 'none';
+          document.getElementById('search-input').value = selectedScheme.schemeName;
+        });
+      });
+    }catch(err){
+      box.innerHTML = '<div class="item">શોધમાં તકલીફ પડી. ઇન્ટરનેટ કનેક્શન ચેક કરો.</div>';
+    }
+  }, 400);
+});
+
+document.querySelectorAll('#type-radio input').forEach(r=>{
+  r.addEventListener('change', ()=>{
+    document.querySelectorAll('#type-radio label').forEach(l=>l.classList.remove('checked'));
+    r.closest('label').classList.add('checked');
+    const isSip = r.value === 'sip';
+    document.getElementById('lumpsum-fields').style.display = isSip ? 'none' : 'block';
+    document.getElementById('sip-fields').style.display = isSip ? 'block' : 'none';
+  });
+});
+document.getElementById('sip-status').addEventListener('change', (e)=>{
+  document.getElementById('sip-stop-date-field').style.display = e.target.value==='stopped' ? 'block' : 'none';
+});
+
+async function saveFund(){
+  const statusEl = document.getElementById('add-status');
+  statusEl.innerHTML = '';
+  if(!selectedScheme){
+    statusEl.innerHTML = '<div class="status-msg err">પહેલા યોજના શોધીને પસંદ કરો.</div>';
+    return;
+  }
+  const itype = document.querySelector('#type-radio input:checked').value;
+  const btn = document.getElementById('save-fund-btn');
+  btn.disabled = true; btn.textContent = 'ડેટા લાવી રહ્યા છીએ...';
+
+  try{
+    const { meta, historyAsc } = await getSchemeHistory(selectedScheme.schemeCode);
+    if(!historyAsc.length) throw new Error('no history');
+
+    let transactions = [];
+    let sipConfig = null;
+
+    if(itype === 'lumpsum'){
+      const dateVal = document.getElementById('ls-date').value;
+      const amount = parseFloat(document.getElementById('ls-amount').value);
+      if(!dateVal || !amount || amount<=0){
+        statusEl.innerHTML = '<div class="status-msg err">તારીખ અને રકમ ભરો.</div>';
+        btn.disabled=false; btn.textContent='ફંડ ટ્રેકિંગમાં ઉમેરો'; return;
+      }
+      const d = new Date(dateVal);
+      const navEntry = findNavOnOrBefore(historyAsc, d) || historyAsc[0];
+      transactions.push({date: toISODate(d), amount: amount, units: amount/navEntry.nav, nav: navEntry.nav});
+    } else {
+      const amount = parseFloat(document.getElementById('sip-amount').value);
+      const startVal = document.getElementById('sip-start').value;
+      const day = parseInt(document.getElementById('sip-day').value);
+      const status = document.getElementById('sip-status').value;
+      const stopVal = document.getElementById('sip-stop-date').value;
+      if(!amount || amount<=0 || !startVal || !day){
+        statusEl.innerHTML = '<div class="status-msg err">બધી SIP વિગતો ભરો.</div>';
+        btn.disabled=false; btn.textContent='ફંડ ટ્રેકિંગમાં ઉમેરો'; return;
+      }
+      const startDate = new Date(startVal);
+      const endDate = (status==='stopped' && stopVal) ? new Date(stopVal) : new Date();
+      const installs = generateSipInstallments(startDate, day, endDate, amount, historyAsc);
+      transactions = installs.map(i=>({date: toISODate(i.date), amount: i.amount, units: i.units, nav: i.nav}));
+      sipConfig = { amount, startDate: startVal, dayOfMonth: day, status, stopDate: stopVal || null };
+      if(!transactions.length){
+        statusEl.innerHTML = '<div class="status-msg err">આ સમયગાળા માટે NAV ડેટા મળ્યો નહીં.</div>';
+        btn.disabled=false; btn.textContent='ફંડ ટ્રેકિંગમાં ઉમેરો'; return;
+      }
+    }
+
+    const latest = historyAsc[historyAsc.length-1];
+    const newScheme = {
+      id: 'f_' + Date.now(),
+      schemeCode: selectedScheme.schemeCode,
+      schemeName: selectedScheme.schemeName,
+      type: itype,
+      sipConfig,
+      transactions,
+      comment: document.getElementById('fund-comment').value || '',
+      lastNav: latest.nav,
+      lastNavDate: toISODate(latest.date),
+      lastCheckedAt: new Date().toISOString(),
+      trackingActive: true
+    };
+
+    const schemes = await loadSchemes();
+    schemes.push(newScheme);
+    await saveSchemes(schemes);
+
+    statusEl.innerHTML = '<div class="status-msg ok">ફંડ સફળતાપૂર્વક ઉમેરાયું! પોર્ટફોલિયો ટેબમાં જુઓ.</div>';
+    // reset form
+    selectedScheme = null;
+    document.getElementById('selected-scheme-block').innerHTML = '';
+    document.getElementById('add-form-block').style.display = 'none';
+    document.getElementById('search-input').value = '';
+    document.getElementById('fund-comment').value = '';
+    await renderDashboard();
+  }catch(err){
+    console.error(err);
+    statusEl.innerHTML = '<div class="status-msg err">ડેટા લાવવામાં તકલીફ પડી. ફરી પ્રયત્ન કરો.</div>';
+  }
+  btn.disabled = false; btn.textContent = 'ફંડ ટ્રેકિંગમાં ઉમેરો';
+}
+
+/* =========================================================
+   DASHBOARD RENDERING
+   ========================================================= */
+let growthChartInstance = null;
+
+function computeSchemeMetrics(scheme){
+  const totalUnits = scheme.transactions.reduce((s,t)=>s+t.units,0);
+  const invested = scheme.transactions.reduce((s,t)=>s+t.amount,0);
+  const currentValue = totalUnits * scheme.lastNav;
+  const gain = currentValue - invested;
+  const gainPct = invested>0 ? (gain/invested*100) : 0;
+  const cashflows = scheme.transactions.map(t=>({date:new Date(t.date), amount:-t.amount}))
+    .sort((a,b)=>a.date-b.date);
+  cashflows.push({date: new Date(scheme.lastNavDate), amount: currentValue});
+  const rate = xirr(cashflows);
+  return { totalUnits, invested, currentValue, gain, gainPct, xirrPct: rate!==null ? rate*100 : null };
+}
+
+async function renderDashboard(){
+  const schemes = await loadSchemes();
+  const listEl = document.getElementById('fund-list');
+  const emptyEl = document.getElementById('empty-state');
+  const summaryBlock = document.getElementById('summary-block');
+  const chartBlock = document.getElementById('chart-block');
+
+  if(!schemes.length){
+    listEl.innerHTML = '';
+    emptyEl.style.display = 'block';
+    summaryBlock.style.display = 'none';
+    chartBlock.style.display = 'none';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  summaryBlock.style.display = 'grid';
+  chartBlock.style.display = 'block';
+
+  let totalInvested=0, totalCurrent=0;
+  let allCashflows = [];
+  let cardsHtml = '';
+
+  schemes.forEach(scheme=>{
+    const m = computeSchemeMetrics(scheme);
+    totalInvested += m.invested;
+    totalCurrent += m.currentValue;
+    scheme.transactions.forEach(t=>allCashflows.push({date:new Date(t.date), amount:-t.amount}));
+
+    const gainClass = m.gain>=0 ? 'gain':'loss';
+    const stoppedClass = (scheme.type==='sip' && scheme.sipConfig && scheme.sipConfig.status==='stopped') ? 'stopped' : '';
+    const badgeText = scheme.type==='sip'
+      ? (scheme.sipConfig.status==='stopped' ? 'SIP · બંધ' : 'SIP · ચાલુ')
+      : 'LUMPSUM';
+    const badgeClass = (scheme.type==='sip' && scheme.sipConfig.status==='stopped') ? 'badge stopped-badge' : 'badge';
+
+    cardsHtml += `
+      <div class="fund-card ${stoppedClass}">
+        <div class="fund-head">
+          <div>
+            <div class="name">${scheme.schemeName}</div>
+            <div class="code">Code: ${scheme.schemeCode}</div>
+          </div>
+          <span class="${badgeClass}">${badgeText}</span>
+        </div>
+        <div class="fund-grid">
+          <div><div class="lbl">રોકાણ</div><div class="val">${fmtINR(m.invested)}</div></div>
+          <div><div class="lbl">વર્તમાન કિંમત</div><div class="val">${fmtINR(m.currentValue)}</div></div>
+          <div><div class="lbl">નફો/ખોટ</div><div class="val ${gainClass}">${fmtINR(m.gain)} (${m.gainPct.toFixed(1)}%)</div></div>
+          <div><div class="lbl">XIRR</div><div class="val ${m.xirrPct>=0?'gain':'loss'}">${m.xirrPct!==null ? m.xirrPct.toFixed(1)+'%' : '—'}</div></div>
+        </div>
+        <div class="nav-line">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b> · ચેક કર્યું: ${new Date(scheme.lastCheckedAt).toLocaleString('en-IN')}</div>
+        <textarea class="comment" data-id="${scheme.id}" onblur="updateComment('${scheme.id}', this.value)" placeholder="નોંધ લખો...">${scheme.comment||''}</textarea>
+        <div class="fund-actions">
+          <button onclick="refreshOneFund('${scheme.id}')">🔄 NAV તાજું કરો</button>
+          ${scheme.type==='sip' ? `<button onclick="toggleSipStatus('${scheme.id}')">${scheme.sipConfig.status==='stopped' ? '▶️ ફરી ચાલુ કરો' : '⏸ SIP બંધ કરો'}</button>` : ''}
+          <button class="danger" onclick="deleteFund('${scheme.id}')">🗑 કાઢી નાખો</button>
+        </div>
+      </div>`;
+  });
+
+  listEl.innerHTML = cardsHtml;
+
+  const totalGain = totalCurrent - totalInvested;
+  const totalGainPct = totalInvested>0 ? (totalGain/totalInvested*100) : 0;
+  document.getElementById('s-invested').textContent = fmtINR(totalInvested);
+  document.getElementById('s-current').textContent = fmtINR(totalCurrent);
+  document.getElementById('s-gain').textContent = fmtINR(totalGain);
+  const pillEl = document.getElementById('s-gain-pct');
+  pillEl.textContent = (totalGainPct>=0?'+':'') + totalGainPct.toFixed(1) + '%';
+  pillEl.className = 'pill ' + (totalGainPct>=0?'pos':'neg');
+
+  allCashflows.sort((a,b)=>a.date-b.date);
+  const latestDate = schemes.reduce((max,s)=> s.lastNavDate>max?s.lastNavDate:max, schemes[0].lastNavDate);
+  const portfolioCashflows = allCashflows.concat([{date:new Date(latestDate), amount: totalCurrent}]);
+  const portRate = xirr(portfolioCashflows);
+  document.getElementById('s-xirr').textContent = portRate!==null ? (portRate*100).toFixed(1)+'%' : '—';
+
+  renderGrowthChart(schemes);
+}
+
+function updateComment(id, value){
+  loadSchemes().then(schemes=>{
+    const s = schemes.find(x=>x.id===id);
+    if(s){ s.comment = value; saveSchemes(schemes); }
+  });
+}
+
+async function toggleSipStatus(id){
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===id);
+  if(!s || s.type!=='sip') return;
+  if(s.sipConfig.status === 'active'){
+    s.sipConfig.status = 'stopped';
+    s.sipConfig.stopDate = toISODate(new Date());
+  } else {
+    s.sipConfig.status = 'active';
+    s.sipConfig.stopDate = null;
+    // regenerate installments up to today
+    try{
+      const { historyAsc } = await getSchemeHistory(s.schemeCode);
+      const startDate = new Date(s.sipConfig.startDate);
+      const installs = generateSipInstallments(startDate, s.sipConfig.dayOfMonth, new Date(), s.sipConfig.amount, historyAsc);
+      s.transactions = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav}));
+      const latest = historyAsc[historyAsc.length-1];
+      s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
+    }catch(e){ console.error(e); }
+  }
+  await saveSchemes(schemes);
+  await renderDashboard();
+}
+
+async function deleteFund(id){
+  if(!confirm('આ ફંડ ટ્રેકિંગમાંથી કાઢી નાખવું છે? આ પગલું પાછું નહીં લઈ શકાય.')) return;
+  const schemes = await loadSchemes();
+  const filtered = schemes.filter(x=>x.id!==id);
+  await saveSchemes(filtered);
+  await renderDashboard();
+}
+
+async function refreshOneFund(id){
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===id);
+  if(!s) return;
+  try{
+    const { historyAsc } = await getSchemeHistory(s.schemeCode);
+    const latest = historyAsc[historyAsc.length-1];
+    s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
+    if(s.type==='sip' && s.sipConfig.status==='active'){
+      const startDate = new Date(s.sipConfig.startDate);
+      const installs = generateSipInstallments(startDate, s.sipConfig.dayOfMonth, new Date(), s.sipConfig.amount, historyAsc);
+      s.transactions = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav}));
+    }
+    await saveSchemes(schemes);
+    await renderDashboard();
+  }catch(e){
+    alert('NAV તાજું કરવામાં તકલીફ પડી. ઇન્ટરનેટ કનેક્શન ચેક કરો.');
+  }
+}
+
+async function refreshAllFunds(){
+  const schemes = await loadSchemes();
+  for(const s of schemes){
+    try{
+      const { historyAsc } = await getSchemeHistory(s.schemeCode);
+      const latest = historyAsc[historyAsc.length-1];
+      s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
+      if(s.type==='sip' && s.sipConfig.status==='active'){
+        const startDate = new Date(s.sipConfig.startDate);
+        const installs = generateSipInstallments(startDate, s.sipConfig.dayOfMonth, new Date(), s.sipConfig.amount, historyAsc);
+        s.transactions = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav}));
+      }
+    }catch(e){ console.error('refresh failed for', s.schemeName, e); }
+  }
+  await saveSchemes(schemes);
+  await renderDashboard();
+}
+
+/* =========================================================
+   GROWTH CHART (portfolio value over time, monthly samples)
+   ========================================================= */
+async function renderGrowthChart(schemes){
+  // Build monthly date axis from earliest transaction to latest NAV date
+  let minDate = null, maxDate = new Date();
+  schemes.forEach(s=>{
+    s.transactions.forEach(t=>{
+      const d = new Date(t.date);
+      if(!minDate || d<minDate) minDate = d;
+    });
+    const nd = new Date(s.lastNavDate);
+    if(nd>maxDate) maxDate = nd;
+  });
+  if(!minDate) return;
+
+  // fetch full history for each scheme once (cached in-memory for this render)
+  const histories = {};
+  for(const s of schemes){
+    try{
+      const { historyAsc } = await getSchemeHistory(s.schemeCode);
+      histories[s.id] = historyAsc;
+    }catch(e){ histories[s.id] = null; }
+  }
+
+  const monthlyDates = [];
+  let cursor = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+  const endCursor = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
+  while(cursor <= endCursor){
+    monthlyDates.push(new Date(cursor));
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1);
+  }
+
+  const totals = monthlyDates.map(md=>{
+    let total = 0;
+    schemes.forEach(s=>{
+      const hist = histories[s.id];
+      if(!hist) return;
+      const navEntry = findNavOnOrBefore(hist, md);
+      if(!navEntry) return;
+      const unitsAtDate = s.transactions
+        .filter(t=>new Date(t.date) <= md)
+        .reduce((sum,t)=>sum+t.units,0);
+      total += unitsAtDate * navEntry.nav;
+    });
+    return total;
+  });
+
+  const labels = monthlyDates.map(d=>d.toLocaleDateString('en-GB',{month:'short', year:'2-digit'}));
+
+  const ctx = document.getElementById('growthChart').getContext('2d');
+  if(growthChartInstance) growthChartInstance.destroy();
+  growthChartInstance = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels,
+      datasets:[{
+        label:'પોર્ટફોલિયો કિંમત',
+        data: totals,
+        borderColor:'#7A2331',
+        backgroundColor:'rgba(122,35,49,0.08)',
+        fill:true,
+        tension:0.3,
+        pointRadius:0,
+        borderWidth:2.5
+      }]
+    },
+    options:{
+      responsive:true,
+      plugins:{ legend:{display:false} },
+      scales:{
+        x:{ ticks:{ maxTicksLimit:6, font:{size:10} }, grid:{display:false} },
+        y:{ ticks:{ callback:(v)=>'₹'+(v/1000).toFixed(0)+'k', font:{size:10} } }
+      }
+    }
+  });
+}
+
+/* =========================================================
+   SIP / LUMPSUM CALCULATORS (hypothetical, standalone)
+   ========================================================= */
+function runSipCalc(){
+  const monthly = parseFloat(document.getElementById('calc-monthly').value)||0;
+  const annualRate = parseFloat(document.getElementById('calc-return').value)||0;
+  const years = parseFloat(document.getElementById('calc-years').value)||0;
+  const months = years*12;
+  const r = annualRate/100/12;
+  const fv = r===0 ? monthly*months : monthly * ((Math.pow(1+r,months)-1)/r) * (1+r);
+  const invested = monthly*months;
+  const gain = fv-invested;
+  document.getElementById('sip-calc-result').style.display='block';
+  document.getElementById('sip-calc-result').innerHTML = `
+    <div class="row"><span>કુલ રોકાણ</span><span class="v">${fmtINR(invested)}</span></div>
+    <div class="row"><span>અંદાજિત ભવિષ્ય મૂલ્ય</span><span class="v">${fmtINR(fv)}</span></div>
+    <div class="row"><span>અંદાજિત નફો</span><span class="v" style="color:var(--green)">${fmtINR(gain)}</span></div>
+  `;
+}
+function runLumpsumCalc(){
+  const amount = parseFloat(document.getElementById('ls-calc-amount').value)||0;
+  const annualRate = parseFloat(document.getElementById('ls-calc-return').value)||0;
+  const years = parseFloat(document.getElementById('ls-calc-years').value)||0;
+  const fv = amount * Math.pow(1+annualRate/100, years);
+  const gain = fv-amount;
+  document.getElementById('ls-calc-result').style.display='block';
+  document.getElementById('ls-calc-result').innerHTML = `
+    <div class="row"><span>રોકાણ</span><span class="v">${fmtINR(amount)}</span></div>
+    <div class="row"><span>અંદાજિત ભવિષ્ય મૂલ્ય</span><span class="v">${fmtINR(fv)}</span></div>
+    <div class="row"><span>અંદાજિત નફો</span><span class="v" style="color:var(--green)">${fmtINR(gain)}</span></div>
+  `;
+}
+
+/* =========================================================
+   INIT
+   ========================================================= */
+renderDashboard();
+</script>
+</body>
+</html>
