@@ -384,13 +384,13 @@ const STORAGE_KEY = 'mf_schemes_v1';
 
 async function loadSchemes(){
   try{
-    const res = await window.storage.get(STORAGE_KEY, false);
-    return res ? JSON.parse(res.value) : [];
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
   }catch(e){ return []; }
 }
 async function saveSchemes(schemes){
   try{
-    await window.storage.set(STORAGE_KEY, JSON.stringify(schemes), false);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(schemes));
     return true;
   }catch(e){ console.error('storage save failed', e); return false; }
 }
@@ -469,12 +469,11 @@ async function searchSchemes(query){
   const res = await fetch('https://api.mfapi.in/mf/search?q=' + encodeURIComponent(query));
   if(!res.ok) throw new Error('search failed');
   const all = await res.json();
-  // Prefer Direct + Growth plans; hide Regular/IDCW variants when a Direct Growth match exists
-  const directGrowth = all.filter(r=>{
+  // Only Direct plans — Regular plans excluded entirely, no fallback
+  return all.filter(r=>{
     const n = r.schemeName.toLowerCase();
-    return n.includes('direct') && n.includes('growth');
+    return n.includes('direct') && !n.includes('regular');
   });
-  return directGrowth.length ? directGrowth : all;
 }
 async function getSchemeHistory(code){
   const res = await fetch('https://api.mfapi.in/mf/' + code);
@@ -533,7 +532,7 @@ document.getElementById('search-input').addEventListener('input', (e)=>{
     try{
       const results = await searchSchemes(q);
       if(!results.length){
-        box.innerHTML = '<div class="item">કંઈ મળ્યું નહીં. બીજું નામ અજમાવો.</div>';
+        box.innerHTML = '<div class="item">Direct plan ન મળ્યો. નામ ચેક કરો અથવા બીજી રીતે લખો.</div>';
         return;
       }
       box.innerHTML = results.slice(0,25).map(r=>
@@ -555,7 +554,7 @@ document.getElementById('search-input').addEventListener('input', (e)=>{
     }catch(err){
       box.innerHTML = '<div class="item">શોધમાં તકલીફ પડી. ઇન્ટરનેટ કનેક્શન ચેક કરો.</div>';
     }
-  }, 400);
+  }, 250);
 });
 
 document.querySelectorAll('#type-radio input').forEach(r=>{
