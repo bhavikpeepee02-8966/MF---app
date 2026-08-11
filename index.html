@@ -465,10 +465,50 @@ function xirr(cashflows){
 /* =========================================================
    MFAPI.IN CALLS
    ========================================================= */
+/* =========================================================
+   FULL SCHEME LIST (fetched once, cached, searched locally —
+   avoids repeated calls to mfapi's search endpoint which is slow/unreliable)
+   ========================================================= */
+const SCHEME_LIST_KEY = 'mf_scheme_list_cache_v1';
+const SCHEME_LIST_TTL = 24*60*60*1000; // 24 hours
+let fullSchemeList = null;
+
+async function ensureSchemeList(){
+  if(fullSchemeList) return fullSchemeList;
+  try{
+    const cached = localStorage.getItem(SCHEME_LIST_KEY);
+    if(cached){
+      const parsed = JSON.parse(cached);
+      if(Date.now() - parsed.ts < SCHEME_LIST_TTL && Array.isArray(parsed.list) && parsed.list.length){
+        fullSchemeList = parsed.list;
+        return fullSchemeList;
+      }
+    }
+  }catch(e){ /* ignore cache errors, fall through to fetch */ }
+  const res = await fetch('https://api.mfapi.in/mf');
+  if(!res.ok) throw new Error('scheme list fetch failed');
+  const list = await res.json();
+  fullSchemeList = list;
+  try{ localStorage.setItem(SCHEME_LIST_KEY, JSON.stringify({ts:Date.now(), list})); }catch(e){ /* quota exceeded is fine, just won't cache */ }
+  return list;
+}
+
+function searchLocalSchemes(query){
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const results = [];
+  for(const r of fullSchemeList){
+    const n = r.schemeName.toLowerCase();
+    if(terms.every(t=>n.includes(t))){
+      results.push(r);
+      if(results.length>=40) break;
+    }
+  }
+  return results;
+}
+
 async function searchSchemes(query){
-  const res = await fetch('https://api.mfapi.in/mf/search?q=' + encodeURIComponent(query));
-  if(!res.ok) throw new Error('search failed');
-  return await res.json();
+  await ensureSchemeList();
+  return searchLocalSchemes(query);
 }
 async function getSchemeHistory(code){
   const res = await fetch('https://api.mfapi.in/mf/' + code);
@@ -522,7 +562,7 @@ document.getElementById('search-input').addEventListener('input', (e)=>{
   const box = document.getElementById('search-results');
   if(q.length < 3){ box.style.display='none'; box.innerHTML=''; return; }
   searchTimer = setTimeout(async ()=>{
-    box.innerHTML = '<div class="item">શોધી રહ્યા છીએ...</div>';
+    box.innerHTML = '<div class="item">' + (fullSchemeList ? 'શોધી રહ્યા છીએ...' : 'પહેલી વાર — બધી યોજનાઓ લોડ થાય છે (થોડી સેકન્ડ લાગશે)...') + '</div>';
     box.style.display = 'block';
     try{
       const results = await searchSchemes(q);
@@ -549,7 +589,7 @@ document.getElementById('search-input').addEventListener('input', (e)=>{
     }catch(err){
       box.innerHTML = '<div class="item">શોધમાં તકલીફ પડી. ઇન્ટરનેટ કનેક્શન ચેક કરો.</div>';
     }
-  }, 250);
+  }, 120);
 });
 
 document.querySelectorAll('#type-radio input').forEach(r=>{
