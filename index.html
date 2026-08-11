@@ -468,12 +468,7 @@ function xirr(cashflows){
 async function searchSchemes(query){
   const res = await fetch('https://api.mfapi.in/mf/search?q=' + encodeURIComponent(query));
   if(!res.ok) throw new Error('search failed');
-  const all = await res.json();
-  // Only Direct plans — Regular plans excluded entirely, no fallback
-  return all.filter(r=>{
-    const n = r.schemeName.toLowerCase();
-    return n.includes('direct') && !n.includes('regular');
-  });
+  return await res.json();
 }
 async function getSchemeHistory(code){
   const res = await fetch('https://api.mfapi.in/mf/' + code);
@@ -532,7 +527,7 @@ document.getElementById('search-input').addEventListener('input', (e)=>{
     try{
       const results = await searchSchemes(q);
       if(!results.length){
-        box.innerHTML = '<div class="item">Direct plan ન મળ્યો. નામ ચેક કરો અથવા બીજી રીતે લખો.</div>';
+        box.innerHTML = '<div class="item">કંઈ મળ્યું નહીં. બીજું નામ અજમાવો.</div>';
         return;
       }
       box.innerHTML = results.slice(0,25).map(r=>
