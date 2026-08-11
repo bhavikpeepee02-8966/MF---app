@@ -104,6 +104,7 @@
   .pill{ font-size:11.5px; padding:3px 9px; border-radius:20px; font-weight:600; font-family:'IBM Plex Mono',monospace; }
   .pill.pos{ background:var(--green-bg); color:var(--green); }
   .pill.neg{ background:var(--red-bg); color:var(--red); }
+  .pill.neu{ background:#F5EBD1; color:#8a6d1f; }
 
   .chart-wrap{
     background:var(--paper); border:1px solid var(--line); border-radius:12px;
@@ -214,6 +215,16 @@
   .calc-result .row .v{ font-family:'IBM Plex Mono',monospace; font-weight:700; }
 
   h3.section-title{ font-size:14.5px; margin:22px 0 10px 4px; color:var(--maroon-dark); }
+
+  .health-block{ margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); }
+  .health-block .h-title{ font-size:11.5px; color:var(--ink-soft); margin-bottom:7px; font-weight:600; }
+  .health-row{ display:flex; justify-content:space-between; align-items:center; padding:4px 0; font-size:12.5px; }
+  .health-row .h-label{ color:var(--ink-soft); }
+  .health-row .h-val{ font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:12px; padding:2px 8px; border-radius:20px; }
+  .health-row .h-val.pos{ background:var(--green-bg); color:var(--green); }
+  .health-row .h-val.neg{ background:var(--red-bg); color:var(--red); }
+  .health-row .h-val.neu{ background:#F5EBD1; color:#8a6d1f; }
+  .health-note{ font-size:10.5px; color:var(--ink-soft); margin-top:6px; line-height:1.4; }
 </style>
 </head>
 <body>
@@ -300,6 +311,10 @@
         <div class="field">
           <label>રોકાણ રકમ (₹)</label>
           <input type="number" id="ls-amount" placeholder="50000">
+        </div>
+        <div class="field">
+          <label>Units (તમારા statement/CAS પરથી — જૂનું રોકાણ ઉમેરવા માટે)</label>
+          <input type="number" step="any" id="ls-units" placeholder="ખાલી રાખો તો તારીખના NAV પરથી આપોઆપ ગણાશે">
         </div>
       </div>
 
@@ -443,22 +458,27 @@ function xirr(cashflows){
   if(cashflows.length<2) return null;
   const t0 = cashflows[0].date;
   const years = cashflows.map(cf=>daysBetween(t0,cf.date)/365);
-  let rate = 0.15;
+  function npv(rate){
+    let sum=0;
+    for(let i=0;i<cashflows.length;i++) sum += cashflows[i].amount / Math.pow(1+rate, years[i]);
+    return sum;
+  }
+  let lo=-0.9999, hi=10;
+  let fLo=npv(lo), fHi=npv(hi);
+  let tries=0;
+  while(fLo*fHi>0 && tries<60){ hi*=2; fHi=npv(hi); tries++; }
+  if(fLo*fHi>0) return null;
+  let rate=(lo+hi)/2;
   for(let iter=0; iter<200; iter++){
-    let f=0, fp=0;
-    for(let i=0;i<cashflows.length;i++){
-      const t=years[i];
-      f += cashflows[i].amount / Math.pow(1+rate, t);
-      fp += -t*cashflows[i].amount / Math.pow(1+rate, t+1);
-    }
-    if(Math.abs(fp)<1e-12) break;
-    const newRate = rate - f/fp;
-    if(!isFinite(newRate)) break;
-    if(Math.abs(newRate-rate)<1e-7){ rate=newRate; break; }
-    rate = newRate;
-    if(rate <= -0.999) rate = -0.999 + 1e-6;
+    const mid=(lo+hi)/2;
+    const fMid=npv(mid);
+    rate=mid;
+    if(Math.abs(fMid)<1e-6 || (hi-lo)<1e-9) break;
+    if((fLo<0)===(fMid<0)){ lo=mid; fLo=fMid; } else { hi=mid; }
   }
   if(!isFinite(rate)) return null;
+  // Very short holding periods make annualized XIRR meaningless (e.g. 1000%+) — treat as not meaningful
+  if(Math.abs(rate) > 10) return null;
   return rate;
 }
 
@@ -632,7 +652,10 @@ async function saveFund(){
       }
       const d = new Date(dateVal);
       const navEntry = findNavOnOrBefore(historyAsc, d) || historyAsc[0];
-      transactions.push({date: toISODate(d), amount: amount, units: amount/navEntry.nav, nav: navEntry.nav});
+      const unitsVal = parseFloat(document.getElementById('ls-units').value);
+      const finalUnits = (unitsVal && unitsVal>0) ? unitsVal : amount/navEntry.nav;
+      const finalNav = (unitsVal && unitsVal>0) ? amount/unitsVal : navEntry.nav;
+      transactions.push({date: toISODate(d), amount: amount, units: finalUnits, nav: finalNav, source:'lumpsum'});
     } else {
       const amount = parseFloat(document.getElementById('sip-amount').value);
       const startVal = document.getElementById('sip-start').value;
@@ -646,7 +669,7 @@ async function saveFund(){
       const startDate = new Date(startVal);
       const endDate = (status==='stopped' && stopVal) ? new Date(stopVal) : new Date();
       const installs = generateSipInstallments(startDate, day, endDate, amount, historyAsc);
-      transactions = installs.map(i=>({date: toISODate(i.date), amount: i.amount, units: i.units, nav: i.nav}));
+      transactions = installs.map(i=>({date: toISODate(i.date), amount: i.amount, units: i.units, nav: i.nav, source:'sip'}));
       sipConfig = { amount, startDate: startVal, dayOfMonth: day, status, stopDate: stopVal || null };
       if(!transactions.length){
         statusEl.innerHTML = '<div class="status-msg err">આ સમયગાળા માટે NAV ડેટા મળ્યો નહીં.</div>';
@@ -680,6 +703,7 @@ async function saveFund(){
     document.getElementById('add-form-block').style.display = 'none';
     document.getElementById('search-input').value = '';
     document.getElementById('fund-comment').value = '';
+    document.getElementById('ls-units').value = '';
     await renderDashboard();
   }catch(err){
     console.error(err);
@@ -757,9 +781,14 @@ async function renderDashboard(){
           <div><div class="lbl">XIRR</div><div class="val ${m.xirrPct>=0?'gain':'loss'}">${m.xirrPct!==null ? m.xirrPct.toFixed(1)+'%' : '—'}</div></div>
         </div>
         <div class="nav-line">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b> · ચેક કર્યું: ${new Date(scheme.lastCheckedAt).toLocaleString('en-IN')}</div>
+        <div class="health-block" id="health-${scheme.id}">
+          <div class="h-title">ફંડ હેલ્થ</div>
+          <div class="health-row"><span class="h-label">ગણતરી થાય છે...</span></div>
+        </div>
         <textarea class="comment" data-id="${scheme.id}" onblur="updateComment('${scheme.id}', this.value)" placeholder="નોંધ લખો...">${scheme.comment||''}</textarea>
         <div class="fund-actions">
           <button onclick="refreshOneFund('${scheme.id}')">🔄 NAV તાજું કરો</button>
+          <button onclick="addTopup('${scheme.id}')">➕ Lumpsum ઉમેરો</button>
           ${scheme.type==='sip' ? `<button onclick="toggleSipStatus('${scheme.id}')">${scheme.sipConfig.status==='stopped' ? '▶️ ફરી ચાલુ કરો' : '⏸ SIP બંધ કરો'}</button>` : ''}
           <button class="danger" onclick="deleteFund('${scheme.id}')">🗑 કાઢી નાખો</button>
         </div>
@@ -783,7 +812,19 @@ async function renderDashboard(){
   const portRate = xirr(portfolioCashflows);
   document.getElementById('s-xirr').textContent = portRate!==null ? (portRate*100).toFixed(1)+'%' : '—';
 
-  renderGrowthChart(schemes);
+  fetchAllHistoriesAndRender(schemes);
+}
+
+async function fetchAllHistoriesAndRender(schemes){
+  const histories = {};
+  for(const s of schemes){
+    try{
+      const { historyAsc } = await getSchemeHistory(s.schemeCode);
+      histories[s.id] = historyAsc;
+    }catch(e){ histories[s.id] = null; }
+  }
+  renderGrowthChart(schemes, histories).catch(e=>console.error('growth chart failed', e));
+  renderFundHealthAll(schemes, histories).catch(e=>console.error('fund health failed', e));
 }
 
 function updateComment(id, value){
@@ -808,7 +849,8 @@ async function toggleSipStatus(id){
       const { historyAsc } = await getSchemeHistory(s.schemeCode);
       const startDate = new Date(s.sipConfig.startDate);
       const installs = generateSipInstallments(startDate, s.sipConfig.dayOfMonth, new Date(), s.sipConfig.amount, historyAsc);
-      s.transactions = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav}));
+      const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'}));
+      s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
       const latest = historyAsc[historyAsc.length-1];
       s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
     }catch(e){ console.error(e); }
@@ -825,6 +867,28 @@ async function deleteFund(id){
   await renderDashboard();
 }
 
+async function addTopup(id){
+  const dateStr = prompt('રોકાણ તારીખ (YYYY-MM-DD):', toISODate(new Date()));
+  if(!dateStr) return;
+  const amount = parseFloat(prompt('રકમ (₹):'));
+  if(!amount || amount<=0){ alert('યોગ્ય રકમ નાખો.'); return; }
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===id);
+  if(!s) return;
+  try{
+    const { historyAsc } = await getSchemeHistory(s.schemeCode);
+    const d = new Date(dateStr);
+    const navEntry = findNavOnOrBefore(historyAsc, d) || historyAsc[0];
+    s.transactions.push({date: dateStr, amount, units: amount/navEntry.nav, nav: navEntry.nav, source:'topup'});
+    const latest = historyAsc[historyAsc.length-1];
+    s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
+    await saveSchemes(schemes);
+    await renderDashboard();
+  }catch(e){
+    alert('NAV લાવવામાં તકલીફ પડી. ઇન્ટરનેટ કનેક્શન ચેક કરો.');
+  }
+}
+
 async function refreshOneFund(id){
   const schemes = await loadSchemes();
   const s = schemes.find(x=>x.id===id);
@@ -836,7 +900,8 @@ async function refreshOneFund(id){
     if(s.type==='sip' && s.sipConfig.status==='active'){
       const startDate = new Date(s.sipConfig.startDate);
       const installs = generateSipInstallments(startDate, s.sipConfig.dayOfMonth, new Date(), s.sipConfig.amount, historyAsc);
-      s.transactions = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav}));
+      const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'}));
+      s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
     }
     await saveSchemes(schemes);
     await renderDashboard();
@@ -855,7 +920,8 @@ async function refreshAllFunds(){
       if(s.type==='sip' && s.sipConfig.status==='active'){
         const startDate = new Date(s.sipConfig.startDate);
         const installs = generateSipInstallments(startDate, s.sipConfig.dayOfMonth, new Date(), s.sipConfig.amount, historyAsc);
-        s.transactions = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav}));
+        const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'}));
+        s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
       }
     }catch(e){ console.error('refresh failed for', s.schemeName, e); }
   }
@@ -864,9 +930,77 @@ async function refreshAllFunds(){
 }
 
 /* =========================================================
+   FUND HEALTH METRICS (CAGR, Volatility, Max Drawdown, Sharpe)
+   Computed purely from NAV history — no external data needed.
+   ========================================================= */
+function computeFundHealth(historyAsc){
+  if(!historyAsc || historyAsc.length<30) return null;
+  const n = historyAsc.length;
+  const latest = historyAsc[n-1];
+  const oneYearAgo = new Date(latest.date); oneYearAgo.setFullYear(oneYearAgo.getFullYear()-1);
+  let startIdx = 0;
+  for(let i=0;i<n;i++){ if(historyAsc[i].date>=oneYearAgo){ startIdx=i; break; } }
+  const startEntry = historyAsc[startIdx];
+  const daysSpan = daysBetween(startEntry.date, latest.date);
+  const isFullYear = daysSpan >= 330;
+  const totalReturn = (latest.nav/startEntry.nav)-1;
+  const cagr = isFullYear ? (Math.pow(latest.nav/startEntry.nav, 365/daysSpan)-1) : totalReturn;
+
+  const windowData = historyAsc.slice(startIdx);
+  const dailyReturns=[];
+  for(let i=1;i<windowData.length;i++) dailyReturns.push(windowData[i].nav/windowData[i-1].nav - 1);
+  const mean = dailyReturns.reduce((a,b)=>a+b,0)/Math.max(1,dailyReturns.length);
+  const variance = dailyReturns.reduce((a,b)=>a+Math.pow(b-mean,2),0)/Math.max(1,dailyReturns.length);
+  const volatilityAnnual = Math.sqrt(variance)*Math.sqrt(252);
+
+  let peak = historyAsc[0].nav, maxDD=0;
+  for(const h of historyAsc){ if(h.nav>peak) peak=h.nav; const dd=(h.nav-peak)/peak; if(dd<maxDD) maxDD=dd; }
+
+  const riskFree = 0.07; // assumed India risk-free reference (~G-sec/FD rate)
+  const sharpe = isFullYear ? (cagr-riskFree)/volatilityAnnual : null;
+
+  return { cagr: cagr*100, isFullYear, volatility: volatilityAnnual*100, maxDrawdown: maxDD*100, sharpe };
+}
+
+function healthRow(label, valueText, colorClass){
+  return `<div class="health-row"><span class="h-label">${label}</span><span class="h-val ${colorClass}">${valueText}</span></div>`;
+}
+
+function renderHealthHtml(h){
+  if(!h){
+    return `<div class="h-title">ફંડ હેલ્થ</div><div class="health-row"><span class="h-label">પૂરતો NAV ડેટા નથી (ઓછામાં ઓછો 1 મહિનો જોઈએ)</span></div>`;
+  }
+  let rows = '';
+  const cagrColor = h.cagr>=12 ? 'pos' : (h.cagr>=8 ? 'neu' : 'neg');
+  rows += healthRow(h.isFullYear ? '1Y CAGR (વાર્ષિક વળતર)' : 'ટૂંકા ગાળાનું વળતર (વાર્ષિક નથી)', (h.cagr>=0?'+':'')+h.cagr.toFixed(1)+'%', h.isFullYear ? cagrColor : 'neu');
+
+  const ddColor = h.maxDrawdown >= -15 ? 'pos' : (h.maxDrawdown >= -30 ? 'neu' : 'neg');
+  rows += healthRow('મહત્તમ ઘટાડો (Drawdown)', h.maxDrawdown.toFixed(1)+'%', ddColor);
+
+  const volColor = h.volatility <= 15 ? 'pos' : (h.volatility <= 25 ? 'neu' : 'neg');
+  rows += healthRow('વોલેટિલિટી (ઉતાર-ચઢાવ)', h.volatility.toFixed(1)+'%', volColor);
+
+  if(h.sharpe!==null){
+    const shColor = h.sharpe >= 1 ? 'pos' : (h.sharpe >= 0.5 ? 'neu' : 'neg');
+    rows += healthRow('Sharpe Ratio', h.sharpe.toFixed(2), shColor);
+  }
+
+  return `<div class="h-title">ફંડ હેલ્થ</div>${rows}<div class="health-note">🟢 સારું · 🟡 સામાન્ય · 🔴 ધ્યાન આપવા જેવું — સામાન્ય ધારાધોરણ પર આધારિત, ફંડ ની category પ્રમાણે બદલાઈ શકે. Investment advice નથી.</div>`;
+}
+
+async function renderFundHealthAll(schemes, histories){
+  for(const s of schemes){
+    const el = document.getElementById('health-'+s.id);
+    if(!el) continue;
+    const h = computeFundHealth(histories[s.id]);
+    el.innerHTML = renderHealthHtml(h);
+  }
+}
+
+/* =========================================================
    GROWTH CHART (portfolio value over time, monthly samples)
    ========================================================= */
-async function renderGrowthChart(schemes){
+async function renderGrowthChart(schemes, histories){
   // Build monthly date axis from earliest transaction to latest NAV date
   let minDate = null, maxDate = new Date();
   schemes.forEach(s=>{
@@ -879,21 +1013,24 @@ async function renderGrowthChart(schemes){
   });
   if(!minDate) return;
 
-  // fetch full history for each scheme once (cached in-memory for this render)
-  const histories = {};
-  for(const s of schemes){
-    try{
-      const { historyAsc } = await getSchemeHistory(s.schemeCode);
-      histories[s.id] = historyAsc;
-    }catch(e){ histories[s.id] = null; }
-  }
-
   const monthlyDates = [];
   let cursor = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
   const endCursor = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
   while(cursor <= endCursor){
     monthlyDates.push(new Date(cursor));
     cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1);
+  }
+  // Fallback: if the span is too short for monthly buckets to show a real line, use daily/weekly points
+  if(monthlyDates.length < 2){
+    monthlyDates.length = 0;
+    const spanDays = Math.max(1, Math.round(daysBetween(minDate, maxDate)));
+    const stepDays = Math.max(1, Math.ceil(spanDays/20));
+    let d = new Date(minDate);
+    while(d <= maxDate){
+      monthlyDates.push(new Date(d));
+      d = new Date(d.getTime() + stepDays*24*60*60*1000);
+    }
+    if(monthlyDates[monthlyDates.length-1].getTime() !== maxDate.getTime()) monthlyDates.push(new Date(maxDate));
   }
 
   const totals = monthlyDates.map(md=>{
@@ -911,7 +1048,10 @@ async function renderGrowthChart(schemes){
     return total;
   });
 
-  const labels = monthlyDates.map(d=>d.toLocaleDateString('en-GB',{month:'short', year:'2-digit'}));
+  const shortSpan = monthlyDates.length > 0 && daysBetween(minDate,maxDate) < 60;
+  const labels = monthlyDates.map(d=> shortSpan
+    ? d.toLocaleDateString('en-GB',{day:'2-digit', month:'short'})
+    : d.toLocaleDateString('en-GB',{month:'short', year:'2-digit'}));
 
   const ctx = document.getElementById('growthChart').getContext('2d');
   if(growthChartInstance) growthChartInstance.destroy();
