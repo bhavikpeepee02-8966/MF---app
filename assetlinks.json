@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.bhavikpeepee02_8966.mftwa",
+        "sha256_cert_fingerprints": ["AB:9D:FC:95:D1:D1:1D:90:92:70:BB:B4:C1:5B:DE:06:3C:C5:CC:32:DA:51:5E:B3:B7:69:BE:6A:80:86:68:4E"]
+      }
+    }]
