@@ -237,6 +237,13 @@
     flex:0 0 auto; font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:13.5px; color:var(--maroon-dark);
     white-space:nowrap;
   }
+  .lump-row .mid .fname{ cursor:pointer; }
+  .lump-row .actions{ flex:0 0 auto; display:flex; gap:6px; }
+  .lump-row .actions button{
+    border:1px solid var(--line); background:var(--ivory-soft); border-radius:7px; padding:5px 8px;
+    font-size:13px; line-height:1; cursor:pointer;
+  }
+  .lump-row .actions button.del{ color:var(--red); border-color:var(--red); }
 
   .health-block{ margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); }
   .health-block .h-title{ font-size:11.5px; color:var(--ink-soft); margin-bottom:7px; font-weight:600; }
@@ -261,6 +268,26 @@
     <div style="display:flex; gap:10px;">
       <button id="confirm-overlay-cancel" style="flex:1; padding:11px; border-radius:9px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font-weight:600; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">રદ કરો</button>
       <button id="confirm-overlay-ok" style="flex:1; padding:11px; border-radius:9px; border:none; background:var(--red); color:#fff; font-weight:700; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">કાઢી નાખો</button>
+    </div>
+  </div>
+</div>
+
+<!-- Custom alert (replaces native alert() — avoids Chrome showing the site/repo domain name) -->
+<div id="alertm-overlay" style="display:none; position:fixed; inset:0; background:rgba(20,30,25,0.55); z-index:1200; align-items:center; justify-content:center; padding:20px;">
+  <div style="background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:20px; max-width:320px; width:100%; box-shadow:0 12px 30px rgba(0,0,0,0.2);">
+    <div id="alertm-overlay-text" style="font-size:14px; color:var(--ink); margin-bottom:18px; line-height:1.5;"></div>
+    <button id="alertm-overlay-ok" style="width:100%; padding:11px; border-radius:9px; border:none; background:var(--maroon-dark); color:#fff; font-weight:700; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">બરાબર</button>
+  </div>
+</div>
+
+<!-- Custom prompt (replaces native prompt() — avoids Chrome showing the site/repo domain name) -->
+<div id="promptm-overlay" style="display:none; position:fixed; inset:0; background:rgba(20,30,25,0.55); z-index:1200; align-items:center; justify-content:center; padding:20px;">
+  <div style="background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:20px; max-width:320px; width:100%; box-shadow:0 12px 30px rgba(0,0,0,0.2);">
+    <div id="promptm-overlay-label" style="font-size:13.5px; font-weight:600; color:var(--ink-soft); margin-bottom:8px;"></div>
+    <input id="promptm-overlay-input" type="text" style="width:100%; padding:10px 12px; border-radius:9px; border:1.5px solid var(--line); background:var(--ivory-soft); font-size:14px; font-family:'IBM Plex Mono',monospace; margin-bottom:16px; box-sizing:border-box;">
+    <div style="display:flex; gap:10px;">
+      <button id="promptm-overlay-cancel" style="flex:1; padding:11px; border-radius:9px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font-weight:600; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">રદ કરો</button>
+      <button id="promptm-overlay-ok" style="flex:1; padding:11px; border-radius:9px; border:none; background:var(--maroon-dark); color:#fff; font-weight:700; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">બરાબર</button>
     </div>
   </div>
 </div>
@@ -451,6 +478,28 @@
     <div id="lump-list"></div>
   </section>
 
+  <!-- ============ PROCESSING / RESULT OVERLAY ============ -->
+  <div id="process-overlay" style="display:none; position:fixed; inset:0; background:rgba(20,30,25,0.55); z-index:1100; align-items:center; justify-content:center; padding:20px;">
+    <div style="background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:24px 20px; max-width:320px; width:100%; box-shadow:0 12px 30px rgba(0,0,0,0.2); text-align:center;">
+      <div id="process-spinner" style="width:34px; height:34px; margin:0 auto 14px; border:3.5px solid var(--line); border-top-color:var(--maroon-dark); border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+      <div id="process-icon" style="font-size:36px; margin-bottom:10px; display:none;"></div>
+      <div id="process-text" style="font-family:'Noto Sans Gujarati',sans-serif; font-size:14px; color:var(--ink); line-height:1.5;">Processing...</div>
+      <button id="process-close-btn" onclick="document.getElementById('process-overlay').style.display='none';" style="display:none; margin-top:16px; width:100%; padding:11px; border-radius:9px; border:none; background:var(--maroon-dark); color:#fff; font-weight:700; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">બરાબર</button>
+    </div>
+  </div>
+  <style>@keyframes spin{ to{ transform:rotate(360deg); } }</style>
+
+  <!-- ============ FUND GRAPH MODAL ============ -->
+  <div id="graph-overlay" style="display:none; position:fixed; inset:0; background:rgba(20,30,25,0.55); z-index:1000; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:16px; max-width:480px; width:100%; box-shadow:0 12px 30px rgba(0,0,0,0.2); max-height:88vh; overflow-y:auto;">
+      <div id="graph-title" style="font-family:'Noto Sans Gujarati',sans-serif; font-weight:700; font-size:14px; color:var(--ink); margin-bottom:10px;"></div>
+      <div id="graph-status" style="font-size:12.5px; color:var(--ink-soft);"></div>
+      <div class="chart-wrap" style="margin-top:8px;"><canvas id="fundNavChart"></canvas></div>
+      <div id="graph-legend" style="font-size:11px; color:var(--ink-soft); margin-top:8px; line-height:1.5;"></div>
+      <button onclick="document.getElementById('graph-overlay').style.display='none';" style="margin-top:14px; width:100%; padding:11px; border-radius:9px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font-weight:600; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">બંધ કરો</button>
+    </div>
+  </div>
+
 </main>
 
 <script>
@@ -503,11 +552,12 @@ async function renderLumpsumEntries(){
   filterSel.value = schemes.some(s=>s.id===prevFilter) ? prevFilter : 'all';
 
   // gather all lumpsum-type entries (initial lumpsum + later topups) across funds
+  // keep arrIndex = position within that scheme's transactions array, for edit/delete
   let entries = [];
   schemes.forEach(s=>{
-    (s.transactions||[]).forEach(t=>{
+    (s.transactions||[]).forEach((t, idx)=>{
       if(t.source==='lumpsum' || t.source==='topup'){
-        entries.push({schemeId:s.id, schemeName:s.schemeName, date:t.date, amount:t.amount});
+        entries.push({schemeId:s.id, schemeCode:s.schemeName, schemeName:s.schemeName, arrIndex:idx, date:t.date, amount:t.amount});
       }
     });
   });
@@ -534,12 +584,151 @@ async function renderLumpsumEntries(){
     <div class="lump-row">
       <div class="sr">${idx+1}</div>
       <div class="mid">
-        <div class="fname">${escapeHtml(e.schemeName)}</div>
+        <div class="fname" onclick="showFundGraph('${e.schemeId}')">${escapeHtml(e.schemeName)}</div>
         <div class="fdate">${fmtDate(e.date)}</div>
       </div>
       <div class="amt">${fmtINR(e.amount)}</div>
+      <div class="actions">
+        <button onclick="editLumpEntry('${e.schemeId}', ${e.arrIndex})">✎</button>
+        <button class="del" onclick="deleteLumpEntry('${e.schemeId}', ${e.arrIndex})">✕</button>
+      </div>
     </div>
   `).join('');
+}
+
+async function editLumpEntry(schemeId, arrIndex){
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===schemeId);
+  if(!s) return;
+  const tx = s.transactions[arrIndex];
+  if(!tx) return;
+
+  const newDate = await showPromptM('તારીખ (YYYY-MM-DD):', tx.date);
+  if(!newDate) return;
+  const newAmountStr = await showPromptM('રકમ (₹):', tx.amount);
+  if(newAmountStr===null) return;
+  const newAmount = parseFloat(newAmountStr);
+  if(!newAmount || newAmount<=0){ await showAlertM('યોગ્ય રકમ નાખો.'); return; }
+
+  try{
+    showProcessOverlay('Processing... NAV લાવી રહ્યા છીએ');
+    const { historyAsc } = await getSchemeHistory(s.schemeCode);
+    const d = new Date(newDate);
+    const navEntry = findNavOnOrBefore(historyAsc, d) || historyAsc[0];
+    tx.date = toISODate(d);
+    tx.amount = newAmount;
+    tx.nav = navEntry.nav;
+    tx.units = newAmount / navEntry.nav;
+    const latest = historyAsc[historyAsc.length-1];
+    s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
+    await saveSchemes(schemes);
+    await renderLumpsumEntries();
+    await renderDashboardKeepScroll();
+    finishProcessOverlay(true, '🎉 Congratulations! એન્ટ્રી Complete થઈ ગઈ.');
+  }catch(e){
+    finishProcessOverlay(false, 'Not complete. NAV લાવવામાં તકલીફ પડી, ઇન્ટરનેટ ચેક કરો.');
+  }
+}
+
+async function deleteLumpEntry(schemeId, arrIndex){
+  const ok = await showConfirm('આ એન્ટ્રી કાઢી નાખવી છે? આ પગલું પાછું નહીં લઈ શકાય.');
+  if(!ok) return;
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===schemeId);
+  if(!s) return;
+  s.transactions.splice(arrIndex, 1);
+  await saveSchemes(schemes);
+  await renderLumpsumEntries();
+  await renderDashboardKeepScroll();
+}
+
+let fundNavChartInstance = null;
+async function showFundGraph(schemeId){
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===schemeId);
+  if(!s) return;
+  const overlay = document.getElementById('graph-overlay');
+  const statusEl = document.getElementById('graph-status');
+  const titleEl = document.getElementById('graph-title');
+  const legendEl = document.getElementById('graph-legend');
+  titleEl.textContent = s.schemeName;
+  statusEl.textContent = 'NAV ડેટા લાવી રહ્યા છીએ...';
+  legendEl.innerHTML = '';
+  overlay.style.display = 'flex';
+
+  try{
+    const { historyAsc } = await getSchemeHistory(s.schemeCode);
+    statusEl.textContent = '';
+
+    const labels = historyAsc.map(h=> toISODate(h.date));
+    const navData = historyAsc.map(h=> h.nav);
+
+    // build buy markers: {x: index-of-nearest-label, y: nav-on-purchase-day}
+    const buyPoints = (s.transactions||[])
+      .filter(t=>t.source==='lumpsum' || t.source==='topup')
+      .map(t=>{
+        let idx = labels.indexOf(t.date);
+        if(idx===-1){
+          // find nearest date on-or-before
+          const target = new Date(t.date);
+          const navEntry = findNavOnOrBefore(historyAsc, target);
+          idx = navEntry ? labels.indexOf(toISODate(navEntry.date)) : null;
+        }
+        return idx===null ? null : {x: idx, y: t.nav, date:t.date, amount:t.amount};
+      })
+      .filter(Boolean);
+
+    const ctx = document.getElementById('fundNavChart').getContext('2d');
+    if(fundNavChartInstance) fundNavChartInstance.destroy();
+    fundNavChartInstance = new Chart(ctx, {
+      type:'line',
+      data:{
+        labels,
+        datasets:[
+          {
+            label:'NAV',
+            data: navData,
+            borderColor:'#4CAF50',
+            backgroundColor:'rgba(76,175,80,0.10)',
+            fill:true,
+            tension:0.25,
+            pointRadius:0,
+            borderWidth:2
+          },
+          {
+            type:'scatter',
+            label:'Lumpsum ખરીદી',
+            data: buyPoints.map(p=>({x:p.x, y:p.y})),
+            backgroundColor:'#D32F2F',
+            pointRadius:5,
+            pointHoverRadius:7,
+            showLine:false
+          }
+        ]
+      },
+      options:{
+        responsive:true,
+        plugins:{
+          legend:{ display:true, labels:{ font:{size:10}, color:'#6B7785' } },
+          tooltip:{
+            callbacks:{
+              title: (items)=> labels[items[0].dataIndex] || '',
+            }
+          }
+        },
+        scales:{
+          x:{ ticks:{ maxTicksLimit:6, font:{size:9}, color:'#6B7785' }, grid:{display:false} },
+          y:{ ticks:{ font:{size:10}, color:'#6B7785' }, grid:{color:'rgba(107,119,133,0.12)'} }
+        }
+      }
+    });
+
+    if(buyPoints.length){
+      legendEl.innerHTML = '🔴 લાલ ટપકાં = જ્યાં Lumpsum/SIP થી ખરીદી કરી (' + buyPoints.length + ' વાર)';
+    }
+  }catch(e){
+    statusEl.textContent = 'NAV લાવવામાં તકલીફ પડી. ઇન્ટરનેટ કનેક્શન ચેક કરો.';
+  }
 }
 
 /* =========================================================
@@ -635,11 +824,17 @@ async function ensureSchemeList(){
 
 function searchLocalSchemes(query){
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const codeQuery = query.trim();
   const results = [];
+  const seenCodes = new Set();
   for(const r of fullSchemeList){
+    if(seenCodes.has(r.schemeCode)) continue; // skip exact duplicate codes
     const n = r.schemeName.toLowerCase();
-    if(terms.every(t=>n.includes(t))){
+    const codeMatch = codeQuery.length>=3 && String(r.schemeCode).includes(codeQuery);
+    const nameMatch = terms.every(t=>n.includes(t));
+    if(nameMatch || codeMatch){
       results.push(r);
+      seenCodes.add(r.schemeCode);
       if(results.length>=40) break;
     }
   }
@@ -755,6 +950,7 @@ async function saveFund(){
   const itype = document.querySelector('#type-radio input:checked').value;
   const btn = document.getElementById('save-fund-btn');
   btn.disabled = true; btn.textContent = 'ડેટા લાવી રહ્યા છીએ...';
+  showProcessOverlay('Processing... ફંડ ઉમેરાઈ રહ્યું છે');
 
   try{
     const { meta, historyAsc } = await getSchemeHistory(selectedScheme.schemeCode);
@@ -768,6 +964,7 @@ async function saveFund(){
       const amount = parseFloat(document.getElementById('ls-amount').value);
       if(!dateVal || !amount || amount<=0){
         statusEl.innerHTML = '<div class="status-msg err">તારીખ અને રકમ ભરો.</div>';
+        finishProcessOverlay(false, 'Not complete. તારીખ અને રકમ ભરો.');
         btn.disabled=false; btn.textContent='ફંડ ટ્રેકિંગમાં ઉમેરો'; return;
       }
       const d = new Date(dateVal);
@@ -775,7 +972,7 @@ async function saveFund(){
       const unitsVal = parseFloat(document.getElementById('ls-units').value);
       const finalUnits = (unitsVal && unitsVal>0) ? unitsVal : amount/navEntry.nav;
       const finalNav = (unitsVal && unitsVal>0) ? amount/unitsVal : navEntry.nav;
-      transactions.push({date: toISODate(d), amount: amount, units: finalUnits, nav: finalNav, source:'lumpsum'});
+      transactions.push({date: toISODate(d), amount: amount, units: finalUnits, nav: finalNav, source:'lumpsum', txId: 't_' + Date.now()});
     } else {
       const amount = parseFloat(document.getElementById('sip-amount').value);
       const startVal = document.getElementById('sip-start').value;
@@ -784,6 +981,7 @@ async function saveFund(){
       const stopVal = document.getElementById('sip-stop-date').value;
       if(!amount || amount<=0 || !startVal || !day){
         statusEl.innerHTML = '<div class="status-msg err">બધી SIP વિગતો ભરો.</div>';
+        finishProcessOverlay(false, 'Not complete. બધી SIP વિગતો ભરો.');
         btn.disabled=false; btn.textContent='ફંડ ટ્રેકિંગમાં ઉમેરો'; return;
       }
       const startDate = new Date(startVal);
@@ -793,6 +991,7 @@ async function saveFund(){
       sipConfig = { amount, startDate: startVal, dayOfMonth: day, status, stopDate: stopVal || null };
       if(!transactions.length){
         statusEl.innerHTML = '<div class="status-msg err">આ સમયગાળા માટે NAV ડેટા મળ્યો નહીં.</div>';
+        finishProcessOverlay(false, 'Not complete. NAV ડેટા મળ્યો નહીં.');
         btn.disabled=false; btn.textContent='ફંડ ટ્રેકિંગમાં ઉમેરો'; return;
       }
     }
@@ -817,6 +1016,7 @@ async function saveFund(){
     await saveSchemes(schemes);
 
     statusEl.innerHTML = '<div class="status-msg ok">ફંડ સફળતાપૂર્વક ઉમેરાયું! પોર્ટફોલિયો ટેબમાં જુઓ.</div>';
+    finishProcessOverlay(true, '🎉 Congratulations! ફંડ સફળતાપૂર્વક ઉમેરાયું.');
     // reset form
     selectedScheme = null;
     document.getElementById('selected-scheme-block').innerHTML = '';
@@ -828,6 +1028,7 @@ async function saveFund(){
   }catch(err){
     console.error(err);
     statusEl.innerHTML = '<div class="status-msg err">ડેટા લાવવામાં તકલીફ પડી. ફરી પ્રયત્ન કરો.</div>';
+    finishProcessOverlay(false, 'Not complete. ડેટા લાવવામાં તકલીફ પડી, ફરી પ્રયત્ન કરો.');
   }
   btn.disabled = false; btn.textContent = 'ફંડ ટ્રેકિંગમાં ઉમેરો';
 }
@@ -841,6 +1042,64 @@ let growthChartInstance = null;
    CUSTOM CONFIRM MODAL (replaces native confirm() — no
    browser site-name prefix, and doesn't disturb scroll position)
    ========================================================= */
+function showProcessOverlay(msg){
+  const overlay = document.getElementById('process-overlay');
+  document.getElementById('process-spinner').style.display = 'block';
+  document.getElementById('process-icon').style.display = 'none';
+  document.getElementById('process-close-btn').style.display = 'none';
+  document.getElementById('process-text').textContent = msg || 'Processing...';
+  overlay.style.display = 'flex';
+}
+function finishProcessOverlay(success, msg){
+  document.getElementById('process-spinner').style.display = 'none';
+  const iconEl = document.getElementById('process-icon');
+  iconEl.style.display = 'block';
+  iconEl.textContent = success ? '✅' : '❌';
+  document.getElementById('process-text').textContent = msg || (success ? 'Congratulations! Complete.' : 'Not complete.');
+  document.getElementById('process-close-btn').style.display = 'block';
+}
+
+function showAlertM(message){
+  return new Promise(resolve=>{
+    const overlay = document.getElementById('alertm-overlay');
+    document.getElementById('alertm-overlay-text').textContent = message;
+    overlay.style.display = 'flex';
+    const okBtn = document.getElementById('alertm-overlay-ok');
+    function onOk(){
+      overlay.style.display = 'none';
+      okBtn.removeEventListener('click', onOk);
+      resolve();
+    }
+    okBtn.addEventListener('click', onOk);
+  });
+}
+
+function showPromptM(label, defaultValue){
+  return new Promise(resolve=>{
+    const overlay = document.getElementById('promptm-overlay');
+    document.getElementById('promptm-overlay-label').textContent = label;
+    const input = document.getElementById('promptm-overlay-input');
+    input.value = (defaultValue===undefined || defaultValue===null) ? '' : defaultValue;
+    overlay.style.display = 'flex';
+    setTimeout(()=>{ input.focus(); input.select(); }, 50);
+    const okBtn = document.getElementById('promptm-overlay-ok');
+    const cancelBtn = document.getElementById('promptm-overlay-cancel');
+    function cleanup(result){
+      overlay.style.display = 'none';
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      input.removeEventListener('keydown', onKey);
+      resolve(result);
+    }
+    function onOk(){ cleanup(input.value); }
+    function onCancel(){ cleanup(null); }
+    function onKey(e){ if(e.key==='Enter'){ cleanup(input.value); } else if(e.key==='Escape'){ cleanup(null); } }
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    input.addEventListener('keydown', onKey);
+  });
+}
+
 function showConfirm(message){
   return new Promise(resolve=>{
     const overlay = document.getElementById('confirm-overlay');
@@ -873,7 +1132,7 @@ async function renderDashboardKeepScroll(){
    ========================================================= */
 async function downloadBackup(){
   const schemes = await loadSchemes();
-  if(!schemes.length){ alert('બેકઅપ કરવા માટે હજુ કોઈ ફંડ ડેટા નથી.'); return; }
+  if(!schemes.length){ await showAlertM('બેકઅપ કરવા માટે હજુ કોઈ ફંડ ડેટા નથી.'); return; }
   const blob = new Blob([JSON.stringify(schemes, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -903,7 +1162,7 @@ async function restoreBackup(file){
     await renderDashboardKeepScroll();
     fetchAllHistoriesAndRender(parsed);
   }catch(e){
-    alert('આ ફાઈલ વાંચી ના શકાયું. સાચી backup JSON ફાઈલ પસંદ કરો.');
+    await showAlertM('આ ફાઈલ વાંચી ના શકાયું. સાચી backup JSON ફાઈલ પસંદ કરો.');
   }
 }
 
@@ -1103,24 +1362,28 @@ async function deleteFund(id){
 }
 
 async function addTopup(id){
-  const dateStr = prompt('રોકાણ તારીખ (YYYY-MM-DD):', toISODate(new Date()));
+  const dateStr = await showPromptM('રોકાણ તારીખ (YYYY-MM-DD):', toISODate(new Date()));
   if(!dateStr) return;
-  const amount = parseFloat(prompt('રકમ (₹):'));
-  if(!amount || amount<=0){ alert('યોગ્ય રકમ નાખો.'); return; }
+  const amountStr = await showPromptM('રકમ (₹):', '');
+  if(amountStr===null) return;
+  const amount = parseFloat(amountStr);
+  if(!amount || amount<=0){ await showAlertM('યોગ્ય રકમ નાખો.'); return; }
   const schemes = await loadSchemes();
   const s = schemes.find(x=>x.id===id);
   if(!s) return;
+  showProcessOverlay('Processing... NAV લાવી રહ્યા છીએ');
   try{
     const { historyAsc } = await getSchemeHistory(s.schemeCode);
     const d = new Date(dateStr);
     const navEntry = findNavOnOrBefore(historyAsc, d) || historyAsc[0];
-    s.transactions.push({date: dateStr, amount, units: amount/navEntry.nav, nav: navEntry.nav, source:'topup'});
+    s.transactions.push({date: dateStr, amount, units: amount/navEntry.nav, nav: navEntry.nav, source:'topup', txId: 't_' + Date.now()});
     const latest = historyAsc[historyAsc.length-1];
     s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
     await saveSchemes(schemes);
     await renderDashboardKeepScroll();
+    finishProcessOverlay(true, '🎉 Congratulations! એન્ટ્રી Complete થઈ ગઈ.');
   }catch(e){
-    alert('NAV લાવવામાં તકલીફ પડી. ઇન્ટરનેટ કનેક્શન ચેક કરો.');
+    finishProcessOverlay(false, 'Not complete. NAV લાવવામાં તકલીફ પડી, ઇન્ટરનેટ ચેક કરો.');
   }
 }
 
@@ -1141,7 +1404,7 @@ async function refreshOneFund(id){
     await saveSchemes(schemes);
     await renderDashboardKeepScroll();
   }catch(e){
-    alert('NAV તાજું કરવામાં તકલીફ પડી. ઇન્ટરનેટ કનેક્શન ચેક કરો.');
+    await showAlertM('NAV તાજું કરવામાં તકલીફ પડી. ઇન્ટરનેટ કનેક્શન ચેક કરો.');
   }
 }
 
