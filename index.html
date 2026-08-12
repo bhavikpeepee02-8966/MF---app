@@ -219,6 +219,25 @@
 
   h3.section-title{ font-size:14.5px; margin:22px 0 10px 4px; color:var(--maroon-dark); }
 
+  /* ===== Lumpsum entries list ===== */
+  .lump-row{
+    display:flex; align-items:center; gap:10px; background:var(--paper); border:1px solid var(--line);
+    border-radius:10px; padding:10px 12px; margin-bottom:8px;
+  }
+  .lump-row .sr{
+    flex:0 0 26px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-soft); text-align:center;
+  }
+  .lump-row .mid{ flex:1; min-width:0; }
+  .lump-row .mid .fname{
+    font-family:'Noto Sans Gujarati',sans-serif; font-weight:600; font-size:13px; color:var(--ink);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .lump-row .mid .fdate{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+  .lump-row .amt{
+    flex:0 0 auto; font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:13.5px; color:var(--maroon-dark);
+    white-space:nowrap;
+  }
+
   .health-block{ margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); }
   .health-block .h-title{ font-size:11.5px; color:var(--ink-soft); margin-bottom:7px; font-weight:600; }
   .health-row{ display:flex; justify-content:space-between; align-items:center; padding:4px 0; font-size:12.5px; }
@@ -256,6 +275,7 @@
   <button class="tab-btn active" data-tab="dashboard">પોર્ટફોલિયો</button>
   <button class="tab-btn" data-tab="add">ફંડ ઉમેરો</button>
   <button class="tab-btn" data-tab="calc">SIP કેલ્ક્યુલેટર</button>
+  <button class="tab-btn" data-tab="lumpsum">Lumpsum યાદી</button>
 </nav>
 
 <main>
@@ -418,6 +438,19 @@
     <div class="calc-result" id="ls-calc-result" style="display:none;"></div>
   </section>
 
+  <!-- ============ LUMPSUM ENTRIES LIST ============ -->
+  <section class="tab" id="tab-lumpsum">
+    <h3 class="section-title">Lumpsum એન્ટ્રીઓ</h3>
+    <div class="field">
+      <label>ફંડ પ્રમાણે ફિલ્ટર</label>
+      <select id="lump-filter" onchange="renderLumpsumEntries()">
+        <option value="all">બધા ફંડ</option>
+      </select>
+    </div>
+    <div id="lump-summary" style="font-size:12.5px; color:var(--ink-soft); margin:2px 0 14px;"></div>
+    <div id="lump-list"></div>
+  </section>
+
 </main>
 
 <script>
@@ -448,8 +481,66 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.querySelectorAll('.tab').forEach(s=>s.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab === 'lumpsum') renderLumpsumEntries();
   });
 });
+
+/* =========================================================
+   LUMPSUM ENTRIES LIST (all lumpsum + topup transactions)
+   ========================================================= */
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+async function renderLumpsumEntries(){
+  const schemes = await loadSchemes();
+  const filterSel = document.getElementById('lump-filter');
+  const prevFilter = filterSel.value || 'all';
+
+  // rebuild filter options (fund-wise), keep selection if still valid
+  const optionsHtml = ['<option value="all">બધા ફંડ</option>']
+    .concat(schemes.map(s => `<option value="${s.id}">${escapeHtml(s.schemeName)}</option>`));
+  filterSel.innerHTML = optionsHtml.join('');
+  filterSel.value = schemes.some(s=>s.id===prevFilter) ? prevFilter : 'all';
+
+  // gather all lumpsum-type entries (initial lumpsum + later topups) across funds
+  let entries = [];
+  schemes.forEach(s=>{
+    (s.transactions||[]).forEach(t=>{
+      if(t.source==='lumpsum' || t.source==='topup'){
+        entries.push({schemeId:s.id, schemeName:s.schemeName, date:t.date, amount:t.amount});
+      }
+    });
+  });
+
+  if(filterSel.value !== 'all'){
+    entries = entries.filter(e => e.schemeId === filterSel.value);
+  }
+
+  entries.sort((a,b)=> new Date(a.date) - new Date(b.date));
+
+  const listEl = document.getElementById('lump-list');
+  const summaryEl = document.getElementById('lump-summary');
+
+  if(!entries.length){
+    listEl.innerHTML = '<div class="empty">કોઈ Lumpsum એન્ટ્રી મળી નથી.</div>';
+    summaryEl.textContent = '';
+    return;
+  }
+
+  const total = entries.reduce((sum,e)=> sum + e.amount, 0);
+  summaryEl.textContent = `કુલ ${entries.length} એન્ટ્રી — ${fmtINR(total)}`;
+
+  listEl.innerHTML = entries.map((e,idx)=>`
+    <div class="lump-row">
+      <div class="sr">${idx+1}</div>
+      <div class="mid">
+        <div class="fname">${escapeHtml(e.schemeName)}</div>
+        <div class="fdate">${fmtDate(e.date)}</div>
+      </div>
+      <div class="amt">${fmtINR(e.amount)}</div>
+    </div>
+  `).join('');
+}
 
 /* =========================================================
    DATE / FORMAT HELPERS
