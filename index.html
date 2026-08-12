@@ -298,8 +298,13 @@
       <canvas id="growthChart"></canvas>
     </div>
 
-    <div style="display:flex; gap:8px; margin-bottom:14px;">
+    <div style="display:flex; gap:8px; margin-bottom:10px;">
       <button class="btn-secondary" style="margin-top:0;" onclick="refreshAllFunds()">🔄 બધા NAV તાજા કરો</button>
+    </div>
+    <div style="display:flex; gap:8px; margin-bottom:14px;">
+      <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="downloadBackup()">⬇️ JSON Backup</button>
+      <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="document.getElementById('restore-file-input').click()">⬆️ Backup Restore</button>
+      <input type="file" id="restore-file-input" accept="application/json,.json" style="display:none;" onchange="restoreBackup(this.files[0])">
     </div>
 
     <div id="fund-list"></div>
@@ -770,6 +775,47 @@ async function renderDashboardKeepScroll(){
   await renderDashboard();
   window.scrollTo(0, y);
 }
+
+/* =========================================================
+   JSON BACKUP / RESTORE (data lives in this device's browser
+   only — export lets you save/share it or move to another device)
+   ========================================================= */
+async function downloadBackup(){
+  const schemes = await loadSchemes();
+  if(!schemes.length){ alert('બેકઅપ કરવા માટે હજુ કોઈ ફંડ ડેટા નથી.'); return; }
+  const blob = new Blob([JSON.stringify(schemes, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const dateStr = toISODate(new Date());
+  a.href = url;
+  a.download = 'mf-backup-' + dateStr + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function restoreBackup(file){
+  if(!file) return;
+  try{
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    if(!Array.isArray(parsed)) throw new Error('invalid format');
+    const existing = await loadSchemes();
+    let ok = true;
+    if(existing.length){
+      ok = await showConfirm('હાલનો ડેટા (' + existing.length + ' ફંડ) ડિલીટ થઈને બેકઅપ ફાઈલ (' + parsed.length + ' ફંડ) લોડ થશે. આગળ વધવું છે?');
+    }
+    if(!ok) return;
+    await saveSchemes(parsed);
+    document.getElementById('restore-file-input').value = '';
+    await renderDashboardKeepScroll();
+    fetchAllHistoriesAndRender(parsed);
+  }catch(e){
+    alert('આ ફાઈલ વાંચી ના શકાયું. સાચી backup JSON ફાઈલ પસંદ કરો.');
+  }
+}
+
 
 function computeSchemeMetrics(scheme){
   const totalUnits = scheme.transactions.reduce((s,t)=>s+t.units,0);
