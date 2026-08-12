@@ -245,6 +245,16 @@
   }
   .lump-row .actions button.del{ color:var(--red); border-color:var(--red); }
 
+  /* ===== AMC-wise P&L ===== */
+  .amc-row{
+    background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:11px 13px; margin-bottom:9px;
+  }
+  .amc-row .amc-name{ font-weight:700; font-size:13.5px; color:var(--ink); margin-bottom:6px; font-family:'Noto Sans Gujarati',sans-serif; }
+  .amc-row .amc-line{ display:flex; justify-content:space-between; font-size:12px; color:var(--ink-soft); margin-bottom:2px; }
+  .amc-row .amc-line .v{ font-family:'IBM Plex Mono',monospace; color:var(--ink); font-weight:600; }
+  .amc-row .amc-line .v.pos{ color:var(--green); }
+  .amc-row .amc-line .v.neg{ color:var(--red); }
+
   .health-block{ margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); }
   .health-block .h-title{ font-size:11.5px; color:var(--ink-soft); margin-bottom:7px; font-weight:600; }
   .health-row{ display:flex; justify-content:space-between; align-items:center; padding:4px 0; font-size:12.5px; }
@@ -347,6 +357,9 @@
 
     <div style="display:flex; gap:8px; margin-bottom:10px;">
       <button class="btn-secondary" style="margin-top:0;" onclick="refreshAllFunds()">🔄 બધા NAV તાજા કરો</button>
+    </div>
+    <div style="display:flex; gap:8px; margin-bottom:10px;">
+      <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="showAmcPL()">🏢 AMC પ્રમાણે નફો-નુકસાન</button>
     </div>
     <div style="display:flex; gap:8px; margin-bottom:14px;">
       <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="downloadBackup()">⬇️ JSON Backup</button>
@@ -477,6 +490,15 @@
     <div id="lump-summary" style="font-size:12.5px; color:var(--ink-soft); margin:2px 0 14px;"></div>
     <div id="lump-list"></div>
   </section>
+
+  <!-- ============ AMC-WISE P&L OVERLAY ============ -->
+  <div id="amc-overlay" style="display:none; position:fixed; inset:0; background:rgba(20,30,25,0.55); z-index:1050; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:16px; max-width:480px; width:100%; box-shadow:0 12px 30px rgba(0,0,0,0.2); max-height:88vh; overflow-y:auto;">
+      <div style="font-family:'Noto Sans Gujarati',sans-serif; font-weight:700; font-size:14.5px; color:var(--maroon-dark); margin-bottom:10px;">🏢 AMC પ્રમાણે નફો-નુકસાન</div>
+      <div id="amc-pl-body"></div>
+      <button onclick="document.getElementById('amc-overlay').style.display='none';" style="margin-top:14px; width:100%; padding:11px; border-radius:9px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font-weight:600; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">બંધ કરો</button>
+    </div>
+  </div>
 
   <!-- ============ PROCESSING / RESULT OVERLAY ============ -->
   <div id="process-overlay" style="display:none; position:fixed; inset:0; background:rgba(20,30,25,0.55); z-index:1100; align-items:center; justify-content:center; padding:20px;">
@@ -622,6 +644,7 @@ async function editLumpEntry(schemeId, arrIndex){
     const latest = historyAsc[historyAsc.length-1];
     s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
     await saveSchemes(schemes);
+    await downloadBackup();
     await renderLumpsumEntries();
     await renderDashboardKeepScroll();
     finishProcessOverlay(true, '🎉 Congratulations! એન્ટ્રી Complete થઈ ગઈ.');
@@ -638,6 +661,7 @@ async function deleteLumpEntry(schemeId, arrIndex){
   if(!s) return;
   s.transactions.splice(arrIndex, 1);
   await saveSchemes(schemes);
+  await downloadBackup();
   await renderLumpsumEntries();
   await renderDashboardKeepScroll();
 }
@@ -1014,6 +1038,7 @@ async function saveFund(){
     const schemes = await loadSchemes();
     schemes.push(newScheme);
     await saveSchemes(schemes);
+    await downloadBackup();
 
     statusEl.innerHTML = '<div class="status-msg ok">ફંડ સફળતાપૂર્વક ઉમેરાયું! પોર્ટફોલિયો ટેબમાં જુઓ.</div>';
     finishProcessOverlay(true, '🎉 Congratulations! ફંડ સફળતાપૂર્વક ઉમેરાયું.');
@@ -1180,6 +1205,60 @@ function computeSchemeMetrics(scheme){
   return { totalUnits, invested, currentValue, gain, gainPct, xirrPct: rate!==null ? rate*100 : null };
 }
 
+function extractAmcName(schemeName){
+  // Take the first word (or a known multi-word AMC prefix) as the AMC/fund-house name
+  const multiWordAmcs = ['union','edelweiss','motilal oswal','white oak','quant','mahindra manulife','baroda bnp paribas'];
+  const lower = schemeName.toLowerCase();
+  for(const amc of multiWordAmcs){
+    if(lower.startsWith(amc)) return schemeName.slice(0, amc.length).trim();
+  }
+  return schemeName.split(/\s+/)[0];
+}
+
+async function showAmcPL(){
+  const schemes = await loadSchemes();
+  const overlay = document.getElementById('amc-overlay');
+  const bodyEl = document.getElementById('amc-pl-body');
+
+  if(!schemes.length){
+    bodyEl.innerHTML = '<div class="empty">હજુ કોઈ ફંડ ડેટા નથી.</div>';
+    overlay.style.display = 'flex';
+    return;
+  }
+
+  const amcMap = {};
+  schemes.forEach(s=>{
+    const m = computeSchemeMetrics(s);
+    const amc = extractAmcName(s.schemeName);
+    if(!amcMap[amc]) amcMap[amc] = {invested:0, currentValue:0, count:0};
+    amcMap[amc].invested += m.invested;
+    amcMap[amc].currentValue += m.currentValue;
+    amcMap[amc].count += 1;
+  });
+
+  const amcList = Object.keys(amcMap).map(name=>{
+    const d = amcMap[name];
+    const gain = d.currentValue - d.invested;
+    const gainPct = d.invested>0 ? (gain/d.invested*100) : 0;
+    return {name, ...d, gain, gainPct};
+  }).sort((a,b)=> b.currentValue - a.currentValue);
+
+  bodyEl.innerHTML = amcList.map(a=>{
+    const cls = a.gain >= 0 ? 'pos' : 'neg';
+    const sign = a.gain >= 0 ? '+' : '';
+    return `
+      <div class="amc-row">
+        <div class="amc-name">${escapeHtml(a.name)} <span style="font-weight:400; color:var(--ink-soft); font-size:11px;">(${a.count} fund${a.count>1?'s':''})</span></div>
+        <div class="amc-line"><span>રોકાણ</span><span class="v">${fmtINR(a.invested)}</span></div>
+        <div class="amc-line"><span>વર્તમાન કિંમત</span><span class="v">${fmtINR(a.currentValue)}</span></div>
+        <div class="amc-line"><span>નફો-નુકસાન</span><span class="v ${cls}">${sign}${fmtINR(a.gain)} (${sign}${a.gainPct.toFixed(1)}%)</span></div>
+      </div>
+    `;
+  }).join('');
+
+  overlay.style.display = 'flex';
+}
+
 async function renderDashboard(){
   const schemes = await loadSchemes();
   const listEl = document.getElementById('fund-list');
@@ -1202,26 +1281,18 @@ async function renderDashboard(){
   let allCashflows = [];
   let cardsHtml = '';
 
-  // first pass: compute metrics for every scheme so we know the portfolio total
-  // before rendering any single card (needed for "પોર્ટફોલિયો વેઇટ %")
-  const metricsList = schemes.map(scheme=>{
+  schemes.forEach(scheme=>{
     const m = computeSchemeMetrics(scheme);
     totalInvested += m.invested;
     totalCurrent += m.currentValue;
     scheme.transactions.forEach(t=>allCashflows.push({date:new Date(t.date), amount:-t.amount}));
-    return { scheme, m };
-  });
 
-  metricsList.forEach(({scheme, m})=>{
     const gainClass = m.gain>=0 ? 'gain':'loss';
     const stoppedClass = (scheme.type==='sip' && scheme.sipConfig && scheme.sipConfig.status==='stopped') ? 'stopped' : '';
     const badgeText = scheme.type==='sip'
       ? (scheme.sipConfig.status==='stopped' ? 'SIP · બંધ' : 'SIP · ચાલુ')
       : 'LUMPSUM';
     const badgeClass = (scheme.type==='sip' && scheme.sipConfig.status==='stopped') ? 'badge stopped-badge' : 'badge';
-    const portfolioWt = totalCurrent>0 ? (m.currentValue/totalCurrent*100) : 0;
-    const earliestDate = scheme.transactions.reduce((min,t)=> (!min || t.date<min) ? t.date : min, null);
-    const holdingDays = earliestDate ? Math.round(daysBetween(new Date(earliestDate), new Date(scheme.lastNavDate))) : null;
 
     cardsHtml += `
       <div class="fund-card ${stoppedClass}">
@@ -1237,12 +1308,8 @@ async function renderDashboard(){
           <div><div class="lbl">વર્તમાન કિંમત</div><div class="val">${fmtINR(m.currentValue)}</div></div>
           <div><div class="lbl">નફો/ખોટ</div><div class="val ${gainClass}">${fmtINR(m.gain)} (${m.gainPct.toFixed(1)}%)</div></div>
           <div><div class="lbl">XIRR</div><div class="val ${m.xirrPct>=0?'gain':'loss'}">${m.xirrPct!==null ? m.xirrPct.toFixed(1)+'%' : '—'}</div></div>
-          <div><div class="lbl">એકમો (Units)</div><div class="val">${m.totalUnits.toFixed(3)}</div></div>
-          <div><div class="lbl">પોર્ટફોલિયો વેઇટ</div><div class="val">${portfolioWt.toFixed(2)}%</div></div>
-          <div><div class="lbl">રોકાણ તારીખ</div><div class="val">${earliestDate ? fmtDate(earliestDate) : '—'}</div></div>
-          <div><div class="lbl">રોકાણના દિવસો</div><div class="val">${holdingDays!==null ? holdingDays : '—'}</div></div>
         </div>
-        <div class="nav-line">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b> · ચેક કર્યું: ${new Date(scheme.lastCheckedAt).toLocaleString('en-IN')}</div>
+        <div class="nav-line" onclick="showFundGraph('${scheme.id}')" style="cursor:pointer;">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b> · ચેક કર્યું: ${new Date(scheme.lastCheckedAt).toLocaleString('en-IN')} <span style="color:var(--maroon-dark); font-weight:600;">📈</span></div>
         <div class="daychange-line" id="daychange-${scheme.id}"><span style="color:var(--ink-soft); font-size:11.5px;">આજનો ફેરફાર ગણાય છે...</span></div>
         <div class="health-block" id="health-${scheme.id}">
           <div class="h-title">ફંડ હેલ્થ</div>
@@ -1251,6 +1318,7 @@ async function renderDashboard(){
         <textarea class="comment" data-id="${scheme.id}" onblur="updateComment('${scheme.id}', this.value)" placeholder="નોંધ લખો...">${scheme.comment||''}</textarea>
         <div class="fund-actions">
           <button onclick="refreshOneFund('${scheme.id}')">🔄 NAV તાજું કરો</button>
+          <button onclick="showFundGraph('${scheme.id}')">📈 ગ્રાફ જુઓ</button>
           <button onclick="addTopup('${scheme.id}')">➕ Lumpsum ઉમેરો</button>
           ${scheme.type==='sip' ? `<button onclick="toggleSipStatus('${scheme.id}')">${scheme.sipConfig.status==='stopped' ? '▶️ ફરી ચાલુ કરો' : '⏸ SIP બંધ કરો'}</button>` : ''}
           <button class="danger" onclick="deleteFund('${scheme.id}')">🗑 કાઢી નાખો</button>
@@ -1392,6 +1460,7 @@ async function addTopup(id){
     const latest = historyAsc[historyAsc.length-1];
     s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
     await saveSchemes(schemes);
+    await downloadBackup();
     await renderDashboardKeepScroll();
     finishProcessOverlay(true, '🎉 Congratulations! એન્ટ્રી Complete થઈ ગઈ.');
   }catch(e){
