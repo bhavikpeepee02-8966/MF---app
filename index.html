@@ -838,8 +838,7 @@ async function ensureSchemeList(){
       }
     }
   }catch(e){ /* ignore cache errors, fall through to fetch */ }
-  const res = await fetch('https://api.mfapi.in/mf');
-  if(!res.ok) throw new Error('scheme list fetch failed');
+  const res = await fetchWithRetry('https://api.mfapi.in/mf', 3, 12000);
   const list = await res.json();
   fullSchemeList = list;
   try{ localStorage.setItem(SCHEME_LIST_KEY, JSON.stringify({ts:Date.now(), list})); }catch(e){ /* quota exceeded is fine, just won't cache */ }
@@ -869,12 +868,37 @@ async function searchSchemes(query){
   await ensureSchemeList();
   return searchLocalSchemes(query);
 }
-async function getSchemeHistory(code){
-  const res = await fetch('https://api.mfapi.in/mf/' + code);
-  if(!res.ok) throw new Error('history fetch failed');
+const schemeHistoryCache = {}; // in-memory cache, valid for this session — avoids refetching the same scheme's full history repeatedly (e.g. dashboard load + graph view), which was causing spurious "internet check" errors on slow connections
+const SCHEME_HISTORY_TTL = 15*60*1000; // 15 minutes
+
+async function fetchWithRetry(url, attempts, timeoutMs){
+  let lastErr;
+  for(let i=0;i<attempts;i++){
+    try{
+      const controller = new AbortController();
+      const timer = setTimeout(()=>controller.abort(), timeoutMs);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+      if(!res.ok) throw new Error('fetch failed: ' + res.status);
+      return res;
+    }catch(e){
+      lastErr = e;
+      if(i < attempts-1) await new Promise(r=>setTimeout(r, 900*(i+1))); // brief backoff before retry
+    }
+  }
+  throw lastErr;
+}
+
+async function getSchemeHistory(code, forceRefresh){
+  const cached = schemeHistoryCache[code];
+  if(!forceRefresh && cached && (Date.now()-cached.ts) < SCHEME_HISTORY_TTL){
+    return { meta: cached.meta, historyAsc: cached.historyAsc };
+  }
+  const res = await fetchWithRetry('https://api.mfapi.in/mf/' + code, 3, 12000);
   const data = await res.json();
   // data.data is descending by date; build ascending array with Date objects + numeric nav
   const asc = data.data.map(x=>({date: parseMfDate(x.date), nav: parseFloat(x.nav)})).reverse();
+  schemeHistoryCache[code] = { ts: Date.now(), meta: data.meta, historyAsc: asc };
   return { meta: data.meta, historyAsc: asc };
 }
 function findNavOnOrBefore(historyAsc, targetDate){
@@ -1473,7 +1497,7 @@ async function refreshOneFund(id){
   const s = schemes.find(x=>x.id===id);
   if(!s) return;
   try{
-    const { historyAsc } = await getSchemeHistory(s.schemeCode);
+    const { historyAsc } = await getSchemeHistory(s.schemeCode, true);
     const latest = historyAsc[historyAsc.length-1];
     s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
     if(s.type==='sip' && s.sipConfig.status==='active'){
@@ -1493,7 +1517,7 @@ async function refreshAllFunds(){
   const schemes = await loadSchemes();
   for(const s of schemes){
     try{
-      const { historyAsc } = await getSchemeHistory(s.schemeCode);
+      const { historyAsc } = await getSchemeHistory(s.schemeCode, true);
       const latest = historyAsc[historyAsc.length-1];
       s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
       if(s.type==='sip' && s.sipConfig.status==='active'){
