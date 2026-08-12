@@ -1202,18 +1202,26 @@ async function renderDashboard(){
   let allCashflows = [];
   let cardsHtml = '';
 
-  schemes.forEach(scheme=>{
+  // first pass: compute metrics for every scheme so we know the portfolio total
+  // before rendering any single card (needed for "પોર્ટફોલિયો વેઇટ %")
+  const metricsList = schemes.map(scheme=>{
     const m = computeSchemeMetrics(scheme);
     totalInvested += m.invested;
     totalCurrent += m.currentValue;
     scheme.transactions.forEach(t=>allCashflows.push({date:new Date(t.date), amount:-t.amount}));
+    return { scheme, m };
+  });
 
+  metricsList.forEach(({scheme, m})=>{
     const gainClass = m.gain>=0 ? 'gain':'loss';
     const stoppedClass = (scheme.type==='sip' && scheme.sipConfig && scheme.sipConfig.status==='stopped') ? 'stopped' : '';
     const badgeText = scheme.type==='sip'
       ? (scheme.sipConfig.status==='stopped' ? 'SIP · બંધ' : 'SIP · ચાલુ')
       : 'LUMPSUM';
     const badgeClass = (scheme.type==='sip' && scheme.sipConfig.status==='stopped') ? 'badge stopped-badge' : 'badge';
+    const portfolioWt = totalCurrent>0 ? (m.currentValue/totalCurrent*100) : 0;
+    const earliestDate = scheme.transactions.reduce((min,t)=> (!min || t.date<min) ? t.date : min, null);
+    const holdingDays = earliestDate ? Math.round(daysBetween(new Date(earliestDate), new Date(scheme.lastNavDate))) : null;
 
     cardsHtml += `
       <div class="fund-card ${stoppedClass}">
@@ -1229,6 +1237,10 @@ async function renderDashboard(){
           <div><div class="lbl">વર્તમાન કિંમત</div><div class="val">${fmtINR(m.currentValue)}</div></div>
           <div><div class="lbl">નફો/ખોટ</div><div class="val ${gainClass}">${fmtINR(m.gain)} (${m.gainPct.toFixed(1)}%)</div></div>
           <div><div class="lbl">XIRR</div><div class="val ${m.xirrPct>=0?'gain':'loss'}">${m.xirrPct!==null ? m.xirrPct.toFixed(1)+'%' : '—'}</div></div>
+          <div><div class="lbl">એકમો (Units)</div><div class="val">${m.totalUnits.toFixed(3)}</div></div>
+          <div><div class="lbl">પોર્ટફોલિયો વેઇટ</div><div class="val">${portfolioWt.toFixed(2)}%</div></div>
+          <div><div class="lbl">રોકાણ તારીખ</div><div class="val">${earliestDate ? fmtDate(earliestDate) : '—'}</div></div>
+          <div><div class="lbl">રોકાણના દિવસો</div><div class="val">${holdingDays!==null ? holdingDays : '—'}</div></div>
         </div>
         <div class="nav-line">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b> · ચેક કર્યું: ${new Date(scheme.lastCheckedAt).toLocaleString('en-IN')}</div>
         <div class="daychange-line" id="daychange-${scheme.id}"><span style="color:var(--ink-soft); font-size:11.5px;">આજનો ફેરફાર ગણાય છે...</span></div>
