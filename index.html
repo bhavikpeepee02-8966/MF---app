@@ -5,33 +5,36 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>મ્યુચ્યુઅલ ફંડ ચોપડી</title>
 <link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="theme-color" content="#4CAF50">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700;900&family=Noto+Sans+Gujarati:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
   :root{
-    --maroon:#7A2331;
-    --maroon-dark:#4E1620;
-    --maroon-deep:#3A1017;
-    --ivory:#F1E7D0;
-    --ivory-soft:#FAF5E8;
-    --paper:#FDFBF4;
-    --ink:#2B2320;
-    --ink-soft:#5B4F45;
-    --gold:#B8892B;
-    --gold-bright:#D6A93F;
-    --green:#3F7D58;
-    --green-bg:#E7F1EA;
-    --red:#B23A2E;
-    --red-bg:#F7E9E7;
-    --line:#E3D6B8;
+    --maroon:#4CAF50;
+    --maroon-dark:#3D8B40;
+    --maroon-deep:#2E6930;
+    --ivory:#FFFFFF;
+    --ivory-soft:#F4F7F5;
+    --paper:#FFFFFF;
+    --ink:#1A1F26;
+    --ink-soft:#6B7785;
+    --gold:#4CAF50;
+    --gold-bright:#66BB6A;
+    --green:#2E7D32;
+    --green-bg:#E8F5E9;
+    --red:#D32F2F;
+    --red-bg:#FDECEA;
+    --line:#E3E8EA;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   body{
     background:var(--ivory-soft);
     background-image:
-      radial-gradient(circle at 1px 1px, rgba(122,35,49,0.05) 1px, transparent 0);
+      radial-gradient(circle at 1px 1px, rgba(76,175,80,0.05) 1px, transparent 0);
     background-size: 22px 22px;
     color:var(--ink);
     font-family:'Noto Sans Gujarati','IBM Plex Mono',sans-serif;
@@ -44,11 +47,11 @@
   /* ===== Header — ledger cover ===== */
   header.cover{
     background:linear-gradient(155deg, var(--maroon) 0%, var(--maroon-dark) 55%, var(--maroon-deep) 100%);
-    color:var(--ivory);
+    color:#EAFBF7;
     padding:28px 20px 34px;
     position:relative;
     overflow:hidden;
-    box-shadow:0 6px 18px rgba(58,16,23,0.35);
+    box-shadow:0 6px 18px rgba(8,20,32,0.45);
   }
   header.cover::before{
     content:"";
@@ -65,10 +68,10 @@
     color:var(--gold-bright); margin-left:22px; margin-bottom:4px;
   }
   header.cover h1{
-    margin:0 0 4px 22px; font-size:26px; font-weight:700; letter-spacing:.01em;
+    margin:0 0 4px 22px; font-size:22px; font-weight:600; letter-spacing:.01em; color:#EAFBF7;
   }
   header.cover p{
-    margin:0 0 0 22px; font-size:13px; color:#E6C9CE; font-family:'Noto Sans Gujarati',sans-serif;
+    margin:0 0 0 22px; font-size:13px; color:#BEE9E1; font-family:'Noto Sans Gujarati',sans-serif;
   }
 
   /* ===== Tabs ===== */
@@ -99,12 +102,12 @@
     padding:14px; position:relative;
   }
   .summary .card .lbl{ font-size:11.5px; color:var(--ink-soft); margin-bottom:4px; }
-  .summary .card .val{ font-family:'IBM Plex Mono',monospace; font-size:19px; font-weight:600; }
+  .summary .card .val{ font-family:'IBM Plex Mono',monospace; font-size:17px; font-weight:600; color:var(--ink); }
   .summary .card.wide{ grid-column:1/3; display:flex; justify-content:space-between; align-items:center; }
   .pill{ font-size:11.5px; padding:3px 9px; border-radius:20px; font-weight:600; font-family:'IBM Plex Mono',monospace; }
   .pill.pos{ background:var(--green-bg); color:var(--green); }
   .pill.neg{ background:var(--red-bg); color:var(--red); }
-  .pill.neu{ background:#F5EBD1; color:#8a6d1f; }
+  .pill.neu{ background:#FFF4DE; color:#9A6B00; }
 
   .chart-wrap{
     background:var(--paper); border:1px solid var(--line); border-radius:12px;
@@ -125,7 +128,7 @@
   }
   .fund-card.stopped{ opacity:.68; }
   .fund-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
-  .fund-head .name{ font-family:'Fraunces',serif; font-weight:700; font-size:16px; line-height:1.25; }
+  .fund-head .name{ font-family:'Fraunces',serif; font-weight:600; font-size:15px; line-height:1.3; color:var(--ink); }
   .fund-head .code{ font-size:11px; color:var(--ink-soft); font-family:'IBM Plex Mono',monospace; }
   .badge{
     font-size:10.5px; font-weight:700; letter-spacing:.04em; padding:4px 9px; border-radius:20px;
@@ -139,7 +142,7 @@
     font-size:12.5px;
   }
   .fund-grid .lbl{ color:var(--ink-soft); }
-  .fund-grid .val{ font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:13.5px; }
+  .fund-grid .val{ font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:13px; color:var(--ink); }
   .fund-grid .val.gain{ color:var(--green); }
   .fund-grid .val.loss{ color:var(--red); }
 
@@ -223,11 +226,25 @@
   .health-row .h-val{ font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:12px; padding:2px 8px; border-radius:20px; }
   .health-row .h-val.pos{ background:var(--green-bg); color:var(--green); }
   .health-row .h-val.neg{ background:var(--red-bg); color:var(--red); }
-  .health-row .h-val.neu{ background:#F5EBD1; color:#8a6d1f; }
+  .health-row .h-val.neu{ background:#FFF4DE; color:#9A6B00; }
   .health-note{ font-size:10.5px; color:var(--ink-soft); margin-top:6px; line-height:1.4; }
+  .daychange-line{ margin:6px 0 8px; }
+  .daychange-line .dc-val{ font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:15px; padding:3px 10px; border-radius:8px; }
+  .daychange-line .dc-val.pos{ background:var(--green-bg); color:var(--green); }
+  .daychange-line .dc-val.neg{ background:var(--red-bg); color:var(--red); }
 </style>
 </head>
 <body>
+
+<div id="confirm-overlay" style="display:none; position:fixed; inset:0; background:rgba(20,30,25,0.55); z-index:1000; align-items:center; justify-content:center; padding:20px;">
+  <div style="background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:20px; max-width:340px; width:100%; box-shadow:0 12px 30px rgba(0,0,0,0.2);">
+    <div id="confirm-overlay-text" style="font-size:14px; color:var(--ink); margin-bottom:18px; line-height:1.5;"></div>
+    <div style="display:flex; gap:10px;">
+      <button id="confirm-overlay-cancel" style="flex:1; padding:11px; border-radius:9px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font-weight:600; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">રદ કરો</button>
+      <button id="confirm-overlay-ok" style="flex:1; padding:11px; border-radius:9px; border:none; background:var(--red); color:#fff; font-weight:700; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">કાઢી નાખો</button>
+    </div>
+  </div>
+</div>
 
 <header class="cover">
   <div class="eyebrow">Pragji Premji &amp; Sons</div>
@@ -248,6 +265,13 @@
     <div id="dash-status"></div>
 
     <div class="summary" id="summary-block" style="display:none;">
+      <div class="card wide" style="border:1.5px solid var(--line);">
+        <div>
+          <div class="lbl">આજનો ફેરફાર (Today)</div>
+          <div class="val" id="s-daychange" style="font-size:22px; font-weight:700;">—</div>
+        </div>
+        <span class="pill" id="s-daychange-pct">—</span>
+      </div>
       <div class="card">
         <div class="lbl">કુલ રોકાણ</div>
         <div class="val" id="s-invested">₹0</div>
@@ -717,6 +741,36 @@ async function saveFund(){
    ========================================================= */
 let growthChartInstance = null;
 
+/* =========================================================
+   CUSTOM CONFIRM MODAL (replaces native confirm() — no
+   browser site-name prefix, and doesn't disturb scroll position)
+   ========================================================= */
+function showConfirm(message){
+  return new Promise(resolve=>{
+    const overlay = document.getElementById('confirm-overlay');
+    document.getElementById('confirm-overlay-text').textContent = message;
+    overlay.style.display = 'flex';
+    const okBtn = document.getElementById('confirm-overlay-ok');
+    const cancelBtn = document.getElementById('confirm-overlay-cancel');
+    function cleanup(result){
+      overlay.style.display = 'none';
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      resolve(result);
+    }
+    function onOk(){ cleanup(true); }
+    function onCancel(){ cleanup(false); }
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+  });
+}
+
+async function renderDashboardKeepScroll(){
+  const y = window.scrollY;
+  await renderDashboard();
+  window.scrollTo(0, y);
+}
+
 function computeSchemeMetrics(scheme){
   const totalUnits = scheme.transactions.reduce((s,t)=>s+t.units,0);
   const invested = scheme.transactions.reduce((s,t)=>s+t.amount,0);
@@ -781,6 +835,7 @@ async function renderDashboard(){
           <div><div class="lbl">XIRR</div><div class="val ${m.xirrPct>=0?'gain':'loss'}">${m.xirrPct!==null ? m.xirrPct.toFixed(1)+'%' : '—'}</div></div>
         </div>
         <div class="nav-line">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b> · ચેક કર્યું: ${new Date(scheme.lastCheckedAt).toLocaleString('en-IN')}</div>
+        <div class="daychange-line" id="daychange-${scheme.id}"><span style="color:var(--ink-soft); font-size:11.5px;">આજનો ફેરફાર ગણાય છે...</span></div>
         <div class="health-block" id="health-${scheme.id}">
           <div class="h-title">ફંડ હેલ્થ</div>
           <div class="health-row"><span class="h-label">ગણતરી થાય છે...</span></div>
@@ -825,6 +880,48 @@ async function fetchAllHistoriesAndRender(schemes){
   }
   renderGrowthChart(schemes, histories).catch(e=>console.error('growth chart failed', e));
   renderFundHealthAll(schemes, histories).catch(e=>console.error('fund health failed', e));
+  renderDayChanges(schemes, histories);
+}
+
+function computeDayChange(historyAsc, totalUnits){
+  if(!historyAsc || historyAsc.length<2) return null;
+  const last = historyAsc[historyAsc.length-1];
+  const prev = historyAsc[historyAsc.length-2];
+  const amt = (last.nav - prev.nav) * totalUnits;
+  const pct = (last.nav - prev.nav) / prev.nav * 100;
+  return { amt, pct };
+}
+
+function renderDayChanges(schemes, histories){
+  let totalAmt=0, totalYesterday=0, anyData=false;
+  schemes.forEach(s=>{
+    const el = document.getElementById('daychange-'+s.id);
+    const m = computeSchemeMetrics(s);
+    const dc = computeDayChange(histories[s.id], m.totalUnits);
+    if(el){
+      if(dc){
+        const cls = dc.amt>=0?'pos':'neg';
+        el.innerHTML = `<span class="h-label" style="font-size:11px; color:var(--ink-soft); margin-right:6px;">આજનો ફેરફાર</span><span class="dc-val ${cls}">${dc.amt>=0?'+':''}${fmtINR(dc.amt)} (${dc.pct>=0?'+':''}${dc.pct.toFixed(2)}%)</span>`;
+      } else {
+        el.innerHTML = `<span style="color:var(--ink-soft); font-size:11.5px;">આજનો ફેરફાર ઉપલબ્ધ નથી</span>`;
+      }
+    }
+    if(dc){ anyData=true; totalAmt += dc.amt; totalYesterday += (m.currentValue - dc.amt); }
+  });
+  const sEl = document.getElementById('s-daychange');
+  const pEl = document.getElementById('s-daychange-pct');
+  if(sEl && pEl){
+    if(anyData){
+      const pct = totalYesterday>0 ? (totalAmt/totalYesterday*100) : 0;
+      sEl.textContent = (totalAmt>=0?'+':'') + fmtINR(totalAmt);
+      sEl.style.color = totalAmt>=0 ? 'var(--green)' : 'var(--red)';
+      pEl.textContent = (pct>=0?'+':'')+pct.toFixed(2)+'%';
+      pEl.className = 'pill ' + (totalAmt>=0?'pos':'neg');
+    } else {
+      sEl.textContent = '—'; sEl.style.color = '';
+      pEl.textContent = '—'; pEl.className = 'pill';
+    }
+  }
 }
 
 function updateComment(id, value){
@@ -856,15 +953,16 @@ async function toggleSipStatus(id){
     }catch(e){ console.error(e); }
   }
   await saveSchemes(schemes);
-  await renderDashboard();
+  await renderDashboardKeepScroll();
 }
 
 async function deleteFund(id){
-  if(!confirm('આ ફંડ ટ્રેકિંગમાંથી કાઢી નાખવું છે? આ પગલું પાછું નહીં લઈ શકાય.')) return;
+  const ok = await showConfirm('આ ફંડ ટ્રેકિંગમાંથી કાઢી નાખવું છે? આ પગલું પાછું નહીં લઈ શકાય.');
+  if(!ok) return;
   const schemes = await loadSchemes();
   const filtered = schemes.filter(x=>x.id!==id);
   await saveSchemes(filtered);
-  await renderDashboard();
+  await renderDashboardKeepScroll();
 }
 
 async function addTopup(id){
@@ -883,7 +981,7 @@ async function addTopup(id){
     const latest = historyAsc[historyAsc.length-1];
     s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
     await saveSchemes(schemes);
-    await renderDashboard();
+    await renderDashboardKeepScroll();
   }catch(e){
     alert('NAV લાવવામાં તકલીફ પડી. ઇન્ટરનેટ કનેક્શન ચેક કરો.');
   }
@@ -904,7 +1002,7 @@ async function refreshOneFund(id){
       s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
     }
     await saveSchemes(schemes);
-    await renderDashboard();
+    await renderDashboardKeepScroll();
   }catch(e){
     alert('NAV તાજું કરવામાં તકલીફ પડી. ઇન્ટરનેટ કનેક્શન ચેક કરો.');
   }
@@ -926,7 +1024,7 @@ async function refreshAllFunds(){
     }catch(e){ console.error('refresh failed for', s.schemeName, e); }
   }
   await saveSchemes(schemes);
-  await renderDashboard();
+  await renderDashboardKeepScroll();
 }
 
 /* =========================================================
@@ -1062,8 +1160,8 @@ async function renderGrowthChart(schemes, histories){
       datasets:[{
         label:'પોર્ટફોલિયો કિંમત',
         data: totals,
-        borderColor:'#7A2331',
-        backgroundColor:'rgba(122,35,49,0.08)',
+        borderColor:'#4CAF50',
+        backgroundColor:'rgba(76,175,80,0.12)',
         fill:true,
         tension:0.3,
         pointRadius:0,
@@ -1074,8 +1172,8 @@ async function renderGrowthChart(schemes, histories){
       responsive:true,
       plugins:{ legend:{display:false} },
       scales:{
-        x:{ ticks:{ maxTicksLimit:6, font:{size:10} }, grid:{display:false} },
-        y:{ ticks:{ callback:(v)=>'₹'+(v/1000).toFixed(0)+'k', font:{size:10} } }
+        x:{ ticks:{ maxTicksLimit:6, font:{size:10}, color:'#6B7785' }, grid:{display:false} },
+        y:{ ticks:{ callback:(v)=>'₹'+(v/1000).toFixed(0)+'k', font:{size:10}, color:'#6B7785' }, grid:{color:'rgba(107,119,133,0.12)'} }
       }
     }
   });
@@ -1117,7 +1215,15 @@ function runLumpsumCalc(){
 /* =========================================================
    INIT
    ========================================================= */
-renderDashboard();
+renderDashboard().then(async ()=>{
+  // Auto-refresh NAV every time the app is opened — no manual button press needed
+  const schemes = await loadSchemes();
+  if(schemes.length){
+    document.getElementById('dash-status').innerHTML = '<div class="status-msg ok" style="margin-bottom:12px;">🔄 તાજા NAV લાવી રહ્યા છીએ...</div>';
+    await refreshAllFunds();
+    document.getElementById('dash-status').innerHTML = '';
+  }
+});
 </script>
 </body>
 </html>
