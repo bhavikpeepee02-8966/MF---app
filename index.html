@@ -389,15 +389,16 @@
       <div id="amc-wise-list"></div>
     </div>
 
-    <div style="display:flex; gap:8px; margin-bottom:14px;">
-      <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="downloadBackup()">⬇️ JSON Backup</button>
-      <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="document.getElementById('restore-file-input').click()">⬆️ Backup Restore</button>
-      <input type="file" id="restore-file-input" accept="application/json,.json" style="display:none;" onchange="restoreBackup(this.files[0])">
-    </div>
+    <input type="file" id="restore-file-input" accept="application/json,.json" style="display:none;" onchange="restoreBackup(this.files[0])">
 
     <div id="fund-list"></div>
     <div class="empty" id="empty-state">
       હજુ કોઈ ફંડ ઉમેર્યું નથી.<br>ઉપર "ફંડ ઉમેરો" ટેબમાં જઈને પહેલું ફંડ ઉમેરો.
+    </div>
+
+    <div style="display:flex; gap:8px; margin-top:18px;">
+      <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="downloadBackup()">⬇️ JSON Backup</button>
+      <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="document.getElementById('restore-file-input').click()">⬆️ Backup Restore</button>
     </div>
   </section>
 
