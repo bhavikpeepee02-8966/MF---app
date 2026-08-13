@@ -116,6 +116,19 @@
   .chart-wrap h3{ margin:0 0 8px 6px; font-size:14px; }
   .chart-wrap canvas{ max-height:210px; }
 
+  .nav-stats-row{
+    display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:10px;
+  }
+  .nav-stats-row .ns-item{
+    background:var(--bg,#F4F1EA); border:1px solid var(--line); border-radius:9px;
+    padding:8px 6px; text-align:center;
+  }
+  .nav-stats-row .ns-lbl{ font-size:10px; color:var(--ink-soft); margin-bottom:3px; }
+  .nav-stats-row .ns-val{ font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:13px; color:var(--ink); }
+  .nav-stats-row .ns-val.gain{ color:var(--green); }
+  .nav-stats-row .ns-val.loss{ color:#D32F2F; }
+  .nav-stats-row .ns-date{ font-size:9.5px; color:var(--ink-soft); margin-top:2px; }
+
   /* ===== Fund card — ledger entry ===== */
   .fund-card{
     background:var(--paper); border:1px solid var(--line); border-radius:12px;
@@ -148,6 +161,8 @@
 
   .nav-line{ font-size:11.5px; color:var(--ink-soft); margin:6px 0 10px; }
   .nav-line b{ color:var(--ink); font-family:'IBM Plex Mono',monospace; }
+  .taxfree-line{ font-size:11.5px; color:var(--ink-soft); margin:0 0 10px; }
+  .taxfree-line b{ color:var(--green); font-family:'IBM Plex Mono',monospace; }
 
   textarea.comment{
     width:100%; border:1px dashed var(--line); border-radius:8px; background:var(--ivory-soft);
@@ -245,16 +260,6 @@
   }
   .lump-row .actions button.del{ color:var(--red); border-color:var(--red); }
 
-  /* ===== AMC-wise P&L ===== */
-  .amc-row{
-    background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:11px 13px; margin-bottom:9px;
-  }
-  .amc-row .amc-name{ font-weight:700; font-size:13.5px; color:var(--ink); margin-bottom:6px; font-family:'Noto Sans Gujarati',sans-serif; }
-  .amc-row .amc-line{ display:flex; justify-content:space-between; font-size:12px; color:var(--ink-soft); margin-bottom:2px; }
-  .amc-row .amc-line .v{ font-family:'IBM Plex Mono',monospace; color:var(--ink); font-weight:600; }
-  .amc-row .amc-line .v.pos{ color:var(--green); }
-  .amc-row .amc-line .v.neg{ color:var(--red); }
-
   .health-block{ margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); }
   .health-block .h-title{ font-size:11.5px; color:var(--ink-soft); margin-bottom:7px; font-weight:600; }
   .health-row{ display:flex; justify-content:space-between; align-items:center; padding:4px 0; font-size:12.5px; }
@@ -303,7 +308,6 @@
 </div>
 
 <header class="cover">
-  <div class="eyebrow">Pragji Premji &amp; Sons</div>
   <h1>મ્યુચ્યુઅલ ફંડ ચોપડી</h1>
   <p>રોકાણનો હિસાબ — SIP, Lumpsum, NAV અને XIRR એક જ જગ્યાએ</p>
 </header>
@@ -350,17 +354,6 @@
       </div>
     </div>
 
-    <div class="chart-wrap" id="chart-block" style="display:none;">
-      <h3>ગ્રોથ — સમય મુજબ કુલ કિંમત</h3>
-      <canvas id="growthChart"></canvas>
-    </div>
-
-    <div style="display:flex; gap:8px; margin-bottom:10px;">
-      <button class="btn-secondary" style="margin-top:0;" onclick="refreshAllFunds()">🔄 બધા NAV તાજા કરો</button>
-    </div>
-    <div style="display:flex; gap:8px; margin-bottom:10px;">
-      <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="showAmcPL()">🏢 AMC પ્રમાણે નફો-નુકસાન</button>
-    </div>
     <div style="display:flex; gap:8px; margin-bottom:14px;">
       <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="downloadBackup()">⬇️ JSON Backup</button>
       <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="document.getElementById('restore-file-input').click()">⬆️ Backup Restore</button>
@@ -491,15 +484,6 @@
     <div id="lump-list"></div>
   </section>
 
-  <!-- ============ AMC-WISE P&L OVERLAY ============ -->
-  <div id="amc-overlay" style="display:none; position:fixed; inset:0; background:rgba(20,30,25,0.55); z-index:1050; align-items:center; justify-content:center; padding:16px;">
-    <div style="background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:16px; max-width:480px; width:100%; box-shadow:0 12px 30px rgba(0,0,0,0.2); max-height:88vh; overflow-y:auto;">
-      <div style="font-family:'Noto Sans Gujarati',sans-serif; font-weight:700; font-size:14.5px; color:var(--maroon-dark); margin-bottom:10px;">🏢 AMC પ્રમાણે નફો-નુકસાન</div>
-      <div id="amc-pl-body"></div>
-      <button onclick="document.getElementById('amc-overlay').style.display='none';" style="margin-top:14px; width:100%; padding:11px; border-radius:9px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font-weight:600; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">બંધ કરો</button>
-    </div>
-  </div>
-
   <!-- ============ PROCESSING / RESULT OVERLAY ============ -->
   <div id="process-overlay" style="display:none; position:fixed; inset:0; background:rgba(20,30,25,0.55); z-index:1100; align-items:center; justify-content:center; padding:20px;">
     <div style="background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:24px 20px; max-width:320px; width:100%; box-shadow:0 12px 30px rgba(0,0,0,0.2); text-align:center;">
@@ -517,6 +501,7 @@
       <div id="graph-title" style="font-family:'Noto Sans Gujarati',sans-serif; font-weight:700; font-size:14px; color:var(--ink); margin-bottom:10px;"></div>
       <div id="graph-status" style="font-size:12.5px; color:var(--ink-soft);"></div>
       <div class="chart-wrap" style="margin-top:8px;"><canvas id="fundNavChart"></canvas></div>
+      <div id="graph-nav-stats" class="nav-stats-row"></div>
       <div id="graph-legend" style="font-size:11px; color:var(--ink-soft); margin-top:8px; line-height:1.5;"></div>
       <button onclick="document.getElementById('graph-overlay').style.display='none';" style="margin-top:14px; width:100%; padding:11px; border-radius:9px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font-weight:600; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">બંધ કરો</button>
     </div>
@@ -635,16 +620,15 @@ async function editLumpEntry(schemeId, arrIndex){
   try{
     showProcessOverlay('Processing... NAV લાવી રહ્યા છીએ');
     const { historyAsc } = await getSchemeHistory(s.schemeCode);
-    const d = new Date(newDate);
+    const d = parseLocalDate(newDate);
     const navEntry = findNavOnOrBefore(historyAsc, d) || historyAsc[0];
     tx.date = toISODate(d);
     tx.amount = newAmount;
     tx.nav = navEntry.nav;
     tx.units = newAmount / navEntry.nav;
     const latest = historyAsc[historyAsc.length-1];
-    s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
+    applyLatestNav(s, latest);
     await saveSchemes(schemes);
-    await downloadBackup();
     await renderLumpsumEntries();
     await renderDashboardKeepScroll();
     finishProcessOverlay(true, '🎉 Congratulations! એન્ટ્રી Complete થઈ ગઈ.');
@@ -661,7 +645,6 @@ async function deleteLumpEntry(schemeId, arrIndex){
   if(!s) return;
   s.transactions.splice(arrIndex, 1);
   await saveSchemes(schemes);
-  await downloadBackup();
   await renderLumpsumEntries();
   await renderDashboardKeepScroll();
 }
@@ -686,6 +669,25 @@ async function showFundGraph(schemeId){
 
     const labels = historyAsc.map(h=> toISODate(h.date));
     const navData = historyAsc.map(h=> h.nav);
+
+    // ઓછામાં ઓછી, વધુમાં વધુ, અને સરેરાશ NAV — આખા ઉપલબ્ધ ઇતિહાસ પરથી
+    const navStatsEl = document.getElementById('graph-nav-stats');
+    if(navData.length){
+      let lowEntry = historyAsc[0], highEntry = historyAsc[0], sum = 0;
+      historyAsc.forEach(h=>{
+        if(h.nav < lowEntry.nav) lowEntry = h;
+        if(h.nav > highEntry.nav) highEntry = h;
+        sum += h.nav;
+      });
+      const avgNav = sum / historyAsc.length;
+      navStatsEl.innerHTML = `
+        <div class="ns-item"><div class="ns-lbl">ઓછામાં ઓછી NAV</div><div class="ns-val loss">₹${lowEntry.nav.toFixed(2)}</div><div class="ns-date">${fmtDate(lowEntry.date)}</div></div>
+        <div class="ns-item"><div class="ns-lbl">વધુમાં વધુ NAV</div><div class="ns-val gain">₹${highEntry.nav.toFixed(2)}</div><div class="ns-date">${fmtDate(highEntry.date)}</div></div>
+        <div class="ns-item"><div class="ns-lbl">સરેરાશ NAV</div><div class="ns-val">₹${avgNav.toFixed(2)}</div><div class="ns-date">&nbsp;</div></div>
+      `;
+    } else {
+      navStatsEl.innerHTML = '';
+    }
 
     // build buy markers: {x: index-of-nearest-label, y: nav-on-purchase-day}
     const buyPoints = (s.transactions||[])
@@ -779,7 +781,32 @@ function parseMfDate(s){
   return new Date(y, m-1, d);
 }
 function toISODate(d){
-  return d.toISOString().slice(0,10);
+  // local Y/M/D — NEVER use toISOString() here (it converts to UTC and
+  // shifts the date by a day in India's timezone, which was causing the
+  // SIP-date-5-shows-NAV-date-6 mismatch and dropped SIP installments)
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function parseLocalDate(s){
+  // parses a "YYYY-MM-DD" (from <input type="date">) as LOCAL midnight,
+  // NOT UTC midnight — new Date("YYYY-MM-DD") parses as UTC, which caused
+  // off-by-one comparisons against local dates (e.g. first SIP installment
+  // silently dropped when the start date fell on the chosen SIP day)
+  const [y,m,day] = s.split('-').map(Number);
+  return new Date(y, m-1, day);
+}
+function applyLatestNav(s, latest){
+  // ચેક કર્યાનો date/time ત્યારે જ બદલવો જ્યારે AMFI પરથી ખરેખર નવી (નવી
+  // તારીખની) NAV મળી હોય — દર 10 મિનિટે silently poll થાય ત્યારે NAV એ જ
+  // હોય તો જૂનું checked date/time જ રહેવું જોઈએ, નહીં તો NAV જૂની જ છે
+  // છતાં "હમણાં ચેક કર્યું" એવું ખોટું લાગે
+  const newDate = toISODate(latest.date);
+  const isNewNav = (s.lastNavDate !== newDate) || !s.lastCheckedAt;
+  s.lastNav = latest.nav;
+  s.lastNavDate = newDate;
+  if(isNewNav) s.lastCheckedAt = new Date().toISOString();
 }
 
 /* =========================================================
@@ -838,7 +865,8 @@ async function ensureSchemeList(){
       }
     }
   }catch(e){ /* ignore cache errors, fall through to fetch */ }
-  const res = await fetchWithRetry('https://api.mfapi.in/mf', 3, 12000);
+  const res = await fetch('https://api.mfapi.in/mf');
+  if(!res.ok) throw new Error('scheme list fetch failed');
   const list = await res.json();
   fullSchemeList = list;
   try{ localStorage.setItem(SCHEME_LIST_KEY, JSON.stringify({ts:Date.now(), list})); }catch(e){ /* quota exceeded is fine, just won't cache */ }
@@ -868,37 +896,12 @@ async function searchSchemes(query){
   await ensureSchemeList();
   return searchLocalSchemes(query);
 }
-const schemeHistoryCache = {}; // in-memory cache, valid for this session — avoids refetching the same scheme's full history repeatedly (e.g. dashboard load + graph view), which was causing spurious "internet check" errors on slow connections
-const SCHEME_HISTORY_TTL = 15*60*1000; // 15 minutes
-
-async function fetchWithRetry(url, attempts, timeoutMs){
-  let lastErr;
-  for(let i=0;i<attempts;i++){
-    try{
-      const controller = new AbortController();
-      const timer = setTimeout(()=>controller.abort(), timeoutMs);
-      const res = await fetch(url, { signal: controller.signal });
-      clearTimeout(timer);
-      if(!res.ok) throw new Error('fetch failed: ' + res.status);
-      return res;
-    }catch(e){
-      lastErr = e;
-      if(i < attempts-1) await new Promise(r=>setTimeout(r, 900*(i+1))); // brief backoff before retry
-    }
-  }
-  throw lastErr;
-}
-
-async function getSchemeHistory(code, forceRefresh){
-  const cached = schemeHistoryCache[code];
-  if(!forceRefresh && cached && (Date.now()-cached.ts) < SCHEME_HISTORY_TTL){
-    return { meta: cached.meta, historyAsc: cached.historyAsc };
-  }
-  const res = await fetchWithRetry('https://api.mfapi.in/mf/' + code, 3, 12000);
+async function getSchemeHistory(code){
+  const res = await fetch('https://api.mfapi.in/mf/' + code);
+  if(!res.ok) throw new Error('history fetch failed');
   const data = await res.json();
   // data.data is descending by date; build ascending array with Date objects + numeric nav
   const asc = data.data.map(x=>({date: parseMfDate(x.date), nav: parseFloat(x.nav)})).reverse();
-  schemeHistoryCache[code] = { ts: Date.now(), meta: data.meta, historyAsc: asc };
   return { meta: data.meta, historyAsc: asc };
 }
 function findNavOnOrBefore(historyAsc, targetDate){
@@ -907,6 +910,15 @@ function findNavOnOrBefore(historyAsc, targetDate){
     const mid=(lo+hi)>>1;
     if(historyAsc[mid].date <= targetDate){ ans = historyAsc[mid]; lo=mid+1; }
     else hi=mid-1;
+  }
+  return ans;
+}
+function findNavOnOrAfter(historyAsc, targetDate){
+  let lo=0, hi=historyAsc.length-1, ans=null;
+  while(lo<=hi){
+    const mid=(lo+hi)>>1;
+    if(historyAsc[mid].date >= targetDate){ ans = historyAsc[mid]; hi=mid-1; }
+    else lo=mid+1;
   }
   return ans;
 }
@@ -923,7 +935,10 @@ function generateSipInstallments(startDate, dayOfMonth, endDate, amount, history
     const day = Math.min(dayOfMonth, lastDay);
     const instDate = new Date(cursor.getFullYear(), cursor.getMonth(), day);
     if(instDate >= startDate && instDate <= hardEnd){
-      const navEntry = findNavOnOrBefore(historyAsc, instDate);
+      // SIP debit થાય એ તારીખ (instDate) ની NAV નહીં, પણ એના પછીના દિવસની
+      // (અથવા એ પછીનો પહેલો trading day) NAV વપરાય છે — SIP date 5 → NAV date 6
+      const navLookupDate = new Date(instDate.getFullYear(), instDate.getMonth(), instDate.getDate()+1);
+      const navEntry = findNavOnOrAfter(historyAsc, navLookupDate);
       if(navEntry){
         installments.push({date: instDate, amount: amount, units: amount/navEntry.nav, nav: navEntry.nav});
       }
@@ -1015,7 +1030,7 @@ async function saveFund(){
         finishProcessOverlay(false, 'Not complete. તારીખ અને રકમ ભરો.');
         btn.disabled=false; btn.textContent='ફંડ ટ્રેકિંગમાં ઉમેરો'; return;
       }
-      const d = new Date(dateVal);
+      const d = parseLocalDate(dateVal);
       const navEntry = findNavOnOrBefore(historyAsc, d) || historyAsc[0];
       const unitsVal = parseFloat(document.getElementById('ls-units').value);
       const finalUnits = (unitsVal && unitsVal>0) ? unitsVal : amount/navEntry.nav;
@@ -1032,8 +1047,8 @@ async function saveFund(){
         finishProcessOverlay(false, 'Not complete. બધી SIP વિગતો ભરો.');
         btn.disabled=false; btn.textContent='ફંડ ટ્રેકિંગમાં ઉમેરો'; return;
       }
-      const startDate = new Date(startVal);
-      const endDate = (status==='stopped' && stopVal) ? new Date(stopVal) : new Date();
+      const startDate = parseLocalDate(startVal);
+      const endDate = (status==='stopped' && stopVal) ? parseLocalDate(stopVal) : new Date();
       const installs = generateSipInstallments(startDate, day, endDate, amount, historyAsc);
       transactions = installs.map(i=>({date: toISODate(i.date), amount: i.amount, units: i.units, nav: i.nav, source:'sip'}));
       sipConfig = { amount, startDate: startVal, dayOfMonth: day, status, stopDate: stopVal || null };
@@ -1062,7 +1077,6 @@ async function saveFund(){
     const schemes = await loadSchemes();
     schemes.push(newScheme);
     await saveSchemes(schemes);
-    await downloadBackup();
 
     statusEl.innerHTML = '<div class="status-msg ok">ફંડ સફળતાપૂર્વક ઉમેરાયું! પોર્ટફોલિયો ટેબમાં જુઓ.</div>';
     finishProcessOverlay(true, '🎉 Congratulations! ફંડ સફળતાપૂર્વક ઉમેરાયું.');
@@ -1085,7 +1099,6 @@ async function saveFund(){
 /* =========================================================
    DASHBOARD RENDERING
    ========================================================= */
-let growthChartInstance = null;
 
 /* =========================================================
    CUSTOM CONFIRM MODAL (replaces native confirm() — no
@@ -1229,94 +1242,51 @@ function computeSchemeMetrics(scheme){
   return { totalUnits, invested, currentValue, gain, gainPct, xirrPct: rate!==null ? rate*100 : null };
 }
 
-function extractAmcName(schemeName){
-  // Take the first word (or a known multi-word AMC prefix) as the AMC/fund-house name
-  const multiWordAmcs = ['union','edelweiss','motilal oswal','white oak','quant','mahindra manulife','baroda bnp paribas'];
-  const lower = schemeName.toLowerCase();
-  for(const amc of multiWordAmcs){
-    if(lower.startsWith(amc)) return schemeName.slice(0, amc.length).trim();
-  }
-  return schemeName.split(/\s+/)[0];
-}
-
-async function showAmcPL(){
-  const schemes = await loadSchemes();
-  const overlay = document.getElementById('amc-overlay');
-  const bodyEl = document.getElementById('amc-pl-body');
-
-  if(!schemes.length){
-    bodyEl.innerHTML = '<div class="empty">હજુ કોઈ ફંડ ડેટા નથી.</div>';
-    overlay.style.display = 'flex';
-    return;
-  }
-
-  const amcMap = {};
-  schemes.forEach(s=>{
-    const m = computeSchemeMetrics(s);
-    const amc = extractAmcName(s.schemeName);
-    if(!amcMap[amc]) amcMap[amc] = {invested:0, currentValue:0, count:0};
-    amcMap[amc].invested += m.invested;
-    amcMap[amc].currentValue += m.currentValue;
-    amcMap[amc].count += 1;
-  });
-
-  const amcList = Object.keys(amcMap).map(name=>{
-    const d = amcMap[name];
-    const gain = d.currentValue - d.invested;
-    const gainPct = d.invested>0 ? (gain/d.invested*100) : 0;
-    return {name, ...d, gain, gainPct};
-  }).sort((a,b)=> b.currentValue - a.currentValue);
-
-  bodyEl.innerHTML = amcList.map(a=>{
-    const cls = a.gain >= 0 ? 'pos' : 'neg';
-    const sign = a.gain >= 0 ? '+' : '';
-    return `
-      <div class="amc-row">
-        <div class="amc-name">${escapeHtml(a.name)} <span style="font-weight:400; color:var(--ink-soft); font-size:11px;">(${a.count} fund${a.count>1?'s':''})</span></div>
-        <div class="amc-line"><span>રોકાણ</span><span class="v">${fmtINR(a.invested)}</span></div>
-        <div class="amc-line"><span>વર્તમાન કિંમત</span><span class="v">${fmtINR(a.currentValue)}</span></div>
-        <div class="amc-line"><span>નફો-નુકસાન</span><span class="v ${cls}">${sign}${fmtINR(a.gain)} (${sign}${a.gainPct.toFixed(1)}%)</span></div>
-      </div>
-    `;
-  }).join('');
-
-  overlay.style.display = 'flex';
-}
-
 async function renderDashboard(){
   const schemes = await loadSchemes();
   const listEl = document.getElementById('fund-list');
   const emptyEl = document.getElementById('empty-state');
   const summaryBlock = document.getElementById('summary-block');
-  const chartBlock = document.getElementById('chart-block');
 
   if(!schemes.length){
     listEl.innerHTML = '';
     emptyEl.style.display = 'block';
     summaryBlock.style.display = 'none';
-    chartBlock.style.display = 'none';
     return;
   }
   emptyEl.style.display = 'none';
   summaryBlock.style.display = 'grid';
-  chartBlock.style.display = 'block';
 
   let totalInvested=0, totalCurrent=0;
   let allCashflows = [];
   let cardsHtml = '';
 
-  schemes.forEach(scheme=>{
+  // first pass: compute metrics for every scheme so we know the portfolio total
+  // before rendering any single card (needed for "પોર્ટફોલિયો વેઇટ %")
+  const metricsList = schemes.map(scheme=>{
     const m = computeSchemeMetrics(scheme);
     totalInvested += m.invested;
     totalCurrent += m.currentValue;
     scheme.transactions.forEach(t=>allCashflows.push({date:new Date(t.date), amount:-t.amount}));
+    return { scheme, m };
+  });
 
+  metricsList.forEach(({scheme, m})=>{
     const gainClass = m.gain>=0 ? 'gain':'loss';
     const stoppedClass = (scheme.type==='sip' && scheme.sipConfig && scheme.sipConfig.status==='stopped') ? 'stopped' : '';
     const badgeText = scheme.type==='sip'
       ? (scheme.sipConfig.status==='stopped' ? 'SIP · બંધ' : 'SIP · ચાલુ')
       : 'LUMPSUM';
     const badgeClass = (scheme.type==='sip' && scheme.sipConfig.status==='stopped') ? 'badge stopped-badge' : 'badge';
+    const portfolioWt = totalCurrent>0 ? (m.currentValue/totalCurrent*100) : 0;
+    const earliestDate = scheme.transactions.reduce((min,t)=> (!min || t.date<min) ? t.date : min, null);
+    const holdingDays = earliestDate ? Math.round(daysBetween(new Date(earliestDate), new Date(scheme.lastNavDate))) : null;
+    // 1 વર્ષ (365 દિવસ) પૂરું કરી ચૂકેલા units ની આજની કિંમત — એટલે ટેક્સ-ફ્રી (LTCG) ઉપાડ માટે યોગ્ય રકમ.
+    // 1 વર્ષથી ઓછા units ની રકમ ગણતરીમાં લેવાતી નથી (એ ઉપાડવાથી STCG ટેક્સ લાગે).
+    const taxFreeAmount = scheme.transactions.reduce((sum,t)=>{
+      const days = daysBetween(new Date(t.date), new Date(scheme.lastNavDate));
+      return days>=365 ? sum + (t.units * scheme.lastNav) : sum;
+    }, 0);
 
     cardsHtml += `
       <div class="fund-card ${stoppedClass}">
@@ -1332,8 +1302,13 @@ async function renderDashboard(){
           <div><div class="lbl">વર્તમાન કિંમત</div><div class="val">${fmtINR(m.currentValue)}</div></div>
           <div><div class="lbl">નફો/ખોટ</div><div class="val ${gainClass}">${fmtINR(m.gain)} (${m.gainPct.toFixed(1)}%)</div></div>
           <div><div class="lbl">XIRR</div><div class="val ${m.xirrPct>=0?'gain':'loss'}">${m.xirrPct!==null ? m.xirrPct.toFixed(1)+'%' : '—'}</div></div>
+          <div><div class="lbl">એકમો (Units)</div><div class="val">${m.totalUnits.toFixed(3)}</div></div>
+          <div><div class="lbl">પોર્ટફોલિયો વેઇટ</div><div class="val">${portfolioWt.toFixed(2)}%</div></div>
+          <div><div class="lbl">રોકાણ તારીખ</div><div class="val">${earliestDate ? fmtDate(earliestDate) : '—'}</div></div>
+          <div><div class="lbl">રોકાણના દિવસો</div><div class="val">${holdingDays!==null ? holdingDays : '—'}</div></div>
         </div>
-        <div class="nav-line" onclick="showFundGraph('${scheme.id}')" style="cursor:pointer;">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b> · ચેક કર્યું: ${new Date(scheme.lastCheckedAt).toLocaleString('en-IN')} <span style="color:var(--maroon-dark); font-weight:600;">📈</span></div>
+        <div class="nav-line">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b> · ચેક કર્યું: ${new Date(scheme.lastCheckedAt).toLocaleString('en-IN')}</div>
+        <div class="taxfree-line">ટેક્સ-ફ્રી ઉપાડ યોગ્ય રકમ (1 વર્ષ+): <b>${fmtINR(taxFreeAmount)}</b></div>
         <div class="daychange-line" id="daychange-${scheme.id}"><span style="color:var(--ink-soft); font-size:11.5px;">આજનો ફેરફાર ગણાય છે...</span></div>
         <div class="health-block" id="health-${scheme.id}">
           <div class="h-title">ફંડ હેલ્થ</div>
@@ -1341,8 +1316,6 @@ async function renderDashboard(){
         </div>
         <textarea class="comment" data-id="${scheme.id}" onblur="updateComment('${scheme.id}', this.value)" placeholder="નોંધ લખો...">${scheme.comment||''}</textarea>
         <div class="fund-actions">
-          <button onclick="refreshOneFund('${scheme.id}')">🔄 NAV તાજું કરો</button>
-          <button onclick="showFundGraph('${scheme.id}')">📈 ગ્રાફ જુઓ</button>
           <button onclick="addTopup('${scheme.id}')">➕ Lumpsum ઉમેરો</button>
           ${scheme.type==='sip' ? `<button onclick="toggleSipStatus('${scheme.id}')">${scheme.sipConfig.status==='stopped' ? '▶️ ફરી ચાલુ કરો' : '⏸ SIP બંધ કરો'}</button>` : ''}
           <button class="danger" onclick="deleteFund('${scheme.id}')">🗑 કાઢી નાખો</button>
@@ -1378,7 +1351,6 @@ async function fetchAllHistoriesAndRender(schemes){
       histories[s.id] = historyAsc;
     }catch(e){ histories[s.id] = null; }
   }
-  renderGrowthChart(schemes, histories).catch(e=>console.error('growth chart failed', e));
   renderFundHealthAll(schemes, histories).catch(e=>console.error('fund health failed', e));
   renderDayChanges(schemes, histories);
 }
@@ -1444,12 +1416,12 @@ async function toggleSipStatus(id){
     // regenerate installments up to today
     try{
       const { historyAsc } = await getSchemeHistory(s.schemeCode);
-      const startDate = new Date(s.sipConfig.startDate);
+      const startDate = parseLocalDate(s.sipConfig.startDate);
       const installs = generateSipInstallments(startDate, s.sipConfig.dayOfMonth, new Date(), s.sipConfig.amount, historyAsc);
       const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'}));
       s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
       const latest = historyAsc[historyAsc.length-1];
-      s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
+      applyLatestNav(s, latest);
     }catch(e){ console.error(e); }
   }
   await saveSchemes(schemes);
@@ -1478,13 +1450,12 @@ async function addTopup(id){
   showProcessOverlay('Processing... NAV લાવી રહ્યા છીએ');
   try{
     const { historyAsc } = await getSchemeHistory(s.schemeCode);
-    const d = new Date(dateStr);
+    const d = parseLocalDate(dateStr);
     const navEntry = findNavOnOrBefore(historyAsc, d) || historyAsc[0];
     s.transactions.push({date: dateStr, amount, units: amount/navEntry.nav, nav: navEntry.nav, source:'topup', txId: 't_' + Date.now()});
     const latest = historyAsc[historyAsc.length-1];
-    s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
+    applyLatestNav(s, latest);
     await saveSchemes(schemes);
-    await downloadBackup();
     await renderDashboardKeepScroll();
     finishProcessOverlay(true, '🎉 Congratulations! એન્ટ્રી Complete થઈ ગઈ.');
   }catch(e){
@@ -1497,11 +1468,11 @@ async function refreshOneFund(id){
   const s = schemes.find(x=>x.id===id);
   if(!s) return;
   try{
-    const { historyAsc } = await getSchemeHistory(s.schemeCode, true);
+    const { historyAsc } = await getSchemeHistory(s.schemeCode);
     const latest = historyAsc[historyAsc.length-1];
-    s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
+    applyLatestNav(s, latest);
     if(s.type==='sip' && s.sipConfig.status==='active'){
-      const startDate = new Date(s.sipConfig.startDate);
+      const startDate = parseLocalDate(s.sipConfig.startDate);
       const installs = generateSipInstallments(startDate, s.sipConfig.dayOfMonth, new Date(), s.sipConfig.amount, historyAsc);
       const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'}));
       s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
@@ -1517,11 +1488,11 @@ async function refreshAllFunds(){
   const schemes = await loadSchemes();
   for(const s of schemes){
     try{
-      const { historyAsc } = await getSchemeHistory(s.schemeCode, true);
+      const { historyAsc } = await getSchemeHistory(s.schemeCode);
       const latest = historyAsc[historyAsc.length-1];
-      s.lastNav = latest.nav; s.lastNavDate = toISODate(latest.date); s.lastCheckedAt = new Date().toISOString();
+      applyLatestNav(s, latest);
       if(s.type==='sip' && s.sipConfig.status==='active'){
-        const startDate = new Date(s.sipConfig.startDate);
+        const startDate = parseLocalDate(s.sipConfig.startDate);
         const installs = generateSipInstallments(startDate, s.sipConfig.dayOfMonth, new Date(), s.sipConfig.amount, historyAsc);
         const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'}));
         s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
@@ -1601,90 +1572,6 @@ async function renderFundHealthAll(schemes, histories){
 }
 
 /* =========================================================
-   GROWTH CHART (portfolio value over time, monthly samples)
-   ========================================================= */
-async function renderGrowthChart(schemes, histories){
-  // Build monthly date axis from earliest transaction to latest NAV date
-  let minDate = null, maxDate = new Date();
-  schemes.forEach(s=>{
-    s.transactions.forEach(t=>{
-      const d = new Date(t.date);
-      if(!minDate || d<minDate) minDate = d;
-    });
-    const nd = new Date(s.lastNavDate);
-    if(nd>maxDate) maxDate = nd;
-  });
-  if(!minDate) return;
-
-  const monthlyDates = [];
-  let cursor = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
-  const endCursor = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
-  while(cursor <= endCursor){
-    monthlyDates.push(new Date(cursor));
-    cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1);
-  }
-  // Fallback: if the span is too short for monthly buckets to show a real line, use daily/weekly points
-  if(monthlyDates.length < 2){
-    monthlyDates.length = 0;
-    const spanDays = Math.max(1, Math.round(daysBetween(minDate, maxDate)));
-    const stepDays = Math.max(1, Math.ceil(spanDays/20));
-    let d = new Date(minDate);
-    while(d <= maxDate){
-      monthlyDates.push(new Date(d));
-      d = new Date(d.getTime() + stepDays*24*60*60*1000);
-    }
-    if(monthlyDates[monthlyDates.length-1].getTime() !== maxDate.getTime()) monthlyDates.push(new Date(maxDate));
-  }
-
-  const totals = monthlyDates.map(md=>{
-    let total = 0;
-    schemes.forEach(s=>{
-      const hist = histories[s.id];
-      if(!hist) return;
-      const navEntry = findNavOnOrBefore(hist, md);
-      if(!navEntry) return;
-      const unitsAtDate = s.transactions
-        .filter(t=>new Date(t.date) <= md)
-        .reduce((sum,t)=>sum+t.units,0);
-      total += unitsAtDate * navEntry.nav;
-    });
-    return total;
-  });
-
-  const shortSpan = monthlyDates.length > 0 && daysBetween(minDate,maxDate) < 60;
-  const labels = monthlyDates.map(d=> shortSpan
-    ? d.toLocaleDateString('en-GB',{day:'2-digit', month:'short'})
-    : d.toLocaleDateString('en-GB',{month:'short', year:'2-digit'}));
-
-  const ctx = document.getElementById('growthChart').getContext('2d');
-  if(growthChartInstance) growthChartInstance.destroy();
-  growthChartInstance = new Chart(ctx, {
-    type:'line',
-    data:{
-      labels,
-      datasets:[{
-        label:'પોર્ટફોલિયો કિંમત',
-        data: totals,
-        borderColor:'#4CAF50',
-        backgroundColor:'rgba(76,175,80,0.12)',
-        fill:true,
-        tension:0.3,
-        pointRadius:0,
-        borderWidth:2.5
-      }]
-    },
-    options:{
-      responsive:true,
-      plugins:{ legend:{display:false} },
-      scales:{
-        x:{ ticks:{ maxTicksLimit:6, font:{size:10}, color:'#6B7785' }, grid:{display:false} },
-        y:{ ticks:{ callback:(v)=>'₹'+(v/1000).toFixed(0)+'k', font:{size:10}, color:'#6B7785' }, grid:{color:'rgba(107,119,133,0.12)'} }
-      }
-    }
-  });
-}
-
-/* =========================================================
    SIP / LUMPSUM CALCULATORS (hypothetical, standalone)
    ========================================================= */
 function runSipCalc(){
@@ -1729,6 +1616,24 @@ renderDashboard().then(async ()=>{
     document.getElementById('dash-status').innerHTML = '';
   }
 });
+
+// AMFI/mfapi.in ડેટા સામાન્ય રીતે રાત્રે ~11 વાગ્યા પછી update થાય છે.
+// આ app static/client-side હોવાથી ફોન બંધ/app બંધ હોય ત્યારે background માં
+// AMFI ને પોતાની મેળે poll ના કરી શકે — પણ app ખુલ્લી (foreground) હોય ત્યાં
+// સુધી દર 10 મિનિટે ને app ફરી ખોલો/foreground પર લાવો ત્યારે silently
+// નવી NAV ચેક કરી લેશે, જેથી manual button ની જરૂર ના રહે.
+let autoRefreshTimer = null;
+function silentAutoRefresh(){
+  loadSchemes().then(schemes=>{
+    if(!schemes.length) return;
+    refreshAllFunds().then(()=> renderDashboardKeepScroll());
+  });
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible') silentAutoRefresh();
+});
+autoRefreshTimer = setInterval(silentAutoRefresh, 10*60*1000);
+
 </script>
 </body>
 </html>
