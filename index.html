@@ -10,7 +10,6 @@
 <meta name="theme-color" content="#4CAF50">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700;900&family=Noto+Sans+Gujarati:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
   :root{
     --maroon:#4CAF50;
@@ -128,6 +127,36 @@
   .nav-stats-row .ns-val.gain{ color:var(--green); }
   .nav-stats-row .ns-val.loss{ color:#D32F2F; }
   .nav-stats-row .ns-date{ font-size:9.5px; color:var(--ink-soft); margin-top:2px; }
+
+  .amc-row{
+    background:var(--paper); border:1px solid var(--line); border-radius:10px;
+    margin-bottom:8px; overflow:hidden;
+  }
+  .amc-row summary{ list-style:none; cursor:pointer; }
+  .amc-row summary::-webkit-details-marker{ display:none; }
+  .amc-summary{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:12px 14px;
+  }
+  .amc-summary::after{ content:'▸'; color:var(--ink-soft); margin-left:8px; }
+  .amc-row[open] .amc-summary::after{ content:'▾'; }
+  .amc-summary .amc-name{ font-weight:600; font-size:13px; color:var(--ink); }
+  .amc-summary .amc-sub{ font-size:11px; color:var(--ink-soft); }
+  .amc-detail{ padding:0 14px 12px; border-top:1px solid var(--line); }
+  .amc-detail-top{
+    display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;
+    margin:10px 0 8px;
+  }
+  .amc-detail-top .ns-lbl{ font-size:10px; color:var(--ink-soft); }
+  .amc-detail-top .ns-val{ font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:12.5px; color:var(--ink); }
+  .amc-detail-top .ns-val.gain{ color:var(--green); }
+  .amc-detail-top .ns-val.loss{ color:#D32F2F; }
+  .amc-fund-line{
+    display:flex; justify-content:space-between; gap:8px; font-size:11.5px;
+    color:var(--ink-soft); padding:4px 0; border-top:1px dashed var(--line);
+  }
+  .amc-fund-line .gain{ color:var(--green); font-weight:600; }
+  .amc-fund-line .loss{ color:#D32F2F; font-weight:600; }
 
   /* ===== Fund card — ledger entry ===== */
   .fund-card{
@@ -352,6 +381,11 @@
         <div class="lbl">પોર્ટફોલિયો XIRR (વાર્ષિક વળતર)</div>
         <div class="val" id="s-xirr">—</div>
       </div>
+    </div>
+
+    <div id="amc-wise-block" style="display:none; margin-bottom:18px;">
+      <h3 style="font-size:14px; margin:0 0 8px 2px;">AMC મુજબ નફો</h3>
+      <div id="amc-wise-list"></div>
     </div>
 
     <div style="display:flex; gap:8px; margin-bottom:14px;">
@@ -649,7 +683,83 @@ async function deleteLumpEntry(schemeId, arrIndex){
   await renderDashboardKeepScroll();
 }
 
-let fundNavChartInstance = null;
+function drawSimpleLineChart(canvasId, labels, values){
+  const canvas = document.getElementById(canvasId);
+  const parentWidth = canvas.parentElement.clientWidth || 320;
+  const cssW = parentWidth, cssH = 200;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = cssW * dpr;
+  canvas.height = cssH * dpr;
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  if(!values || !values.length) return;
+
+  const padL = 46, padR = 12, padT = 14, padB = 24;
+  const plotW = cssW - padL - padR;
+  const plotH = cssH - padT - padB;
+
+  let vmin = Math.min(...values), vmax = Math.max(...values);
+  if(vmin===vmax){ vmin -= 1; vmax += 1; }
+  const vpad = (vmax-vmin)*0.08;
+  vmin -= vpad; vmax += vpad;
+
+  const xAt = (i)=> values.length===1 ? padL + plotW/2 : padL + (i/(values.length-1))*plotW;
+  const yAt = (v)=> padT + plotH - ((v-vmin)/(vmax-vmin))*plotH;
+
+  // gridlines + y-axis labels (min/mid/max)
+  ctx.strokeStyle = 'rgba(107,119,133,0.15)';
+  ctx.fillStyle = '#6B7785';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'right';
+  [vmin+vpad, (vmin+vmax)/2, vmax-vpad].forEach(v=>{
+    const y = yAt(v);
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(cssW-padR,y); ctx.stroke();
+    ctx.fillText('₹'+v.toFixed(0), padL-6, y+3);
+  });
+
+  // filled area under line
+  ctx.beginPath();
+  ctx.moveTo(xAt(0), yAt(values[0]));
+  values.forEach((v,i)=> ctx.lineTo(xAt(i), yAt(v)));
+  ctx.lineTo(xAt(values.length-1), padT+plotH);
+  ctx.lineTo(xAt(0), padT+plotH);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(76,175,80,0.12)';
+  ctx.fill();
+
+  // line
+  ctx.beginPath();
+  ctx.moveTo(xAt(0), yAt(values[0]));
+  values.forEach((v,i)=> ctx.lineTo(xAt(i), yAt(v)));
+  ctx.strokeStyle = '#4CAF50';
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+
+  // points
+  ctx.fillStyle = '#4CAF50';
+  values.forEach((v,i)=>{
+    ctx.beginPath();
+    ctx.arc(xAt(i), yAt(v), 2.2, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  // x-axis labels — show at most ~5 to avoid overlap on small screens
+  ctx.fillStyle = '#6B7785';
+  ctx.textAlign = 'center';
+  ctx.font = '9px sans-serif';
+  const maxLabels = 5;
+  const step = Math.max(1, Math.ceil(labels.length/maxLabels));
+  labels.forEach((lb,i)=>{
+    if(i%step===0 || i===labels.length-1){
+      ctx.fillText(lb, xAt(i), cssH-6);
+    }
+  });
+}
 async function showFundGraph(schemeId){
   const schemes = await loadSchemes();
   const s = schemes.find(x=>x.id===schemeId);
@@ -667,92 +777,61 @@ async function showFundGraph(schemeId){
     const { historyAsc } = await getSchemeHistory(s.schemeCode);
     statusEl.textContent = '';
 
-    const labels = historyAsc.map(h=> toISODate(h.date));
-    const navData = historyAsc.map(h=> h.nav);
+    // પહેલા રોકાણની તારીખ પછીનો જ ડેટા લેવો — fund ના શરૂઆતના (2013 જેવા
+    // જૂના) હજારો daily records પરથી ગ્રાફ ના બનાવવો, નહીં તો ફોન પર
+    // ગ્રાફ ભારે પડી crash/ભૂલ થાય છે.
+    const firstInvestDate = (s.transactions||[]).reduce((min,t)=>{
+      const d = parseLocalDate(t.date);
+      return (!min || d<min) ? d : min;
+    }, null);
+    const sinceHistory = firstInvestDate
+      ? historyAsc.filter(h=> h.date >= firstInvestDate)
+      : historyAsc;
 
-    // ઓછામાં ઓછી, વધુમાં વધુ, અને સરેરાશ NAV — આખા ઉપલબ્ધ ઇતિહાસ પરથી
+    const labels = sinceHistory.map(h=> toISODate(h.date));
+    const navData = sinceHistory.map(h=> h.nav);
+
+    // ઓછામાં ઓછી / વધુમાં વધુ NAV — પહેલા રોકાણની તારીખથી અત્યાર સુધીના
+    // સમયગાળામાં જ (fund ના શરૂઆતના ઇતિહાસમાં નહીં).
+    // સરેરાશ = તમારી પોતાની સરેરાશ ખરીદ NAV (કુલ રોકાણ ÷ કુલ units).
     const navStatsEl = document.getElementById('graph-nav-stats');
-    if(navData.length){
-      let lowEntry = historyAsc[0], highEntry = historyAsc[0], sum = 0;
-      historyAsc.forEach(h=>{
+    if(sinceHistory.length){
+      let lowEntry = sinceHistory[0], highEntry = sinceHistory[0];
+      sinceHistory.forEach(h=>{
         if(h.nav < lowEntry.nav) lowEntry = h;
         if(h.nav > highEntry.nav) highEntry = h;
-        sum += h.nav;
       });
-      const avgNav = sum / historyAsc.length;
+      const totalUnits = (s.transactions||[]).reduce((sum,t)=>sum+t.units,0);
+      const totalInvested = (s.transactions||[]).reduce((sum,t)=>sum+t.amount,0);
+      const myAvgNav = totalUnits>0 ? (totalInvested/totalUnits) : 0;
       navStatsEl.innerHTML = `
         <div class="ns-item"><div class="ns-lbl">ઓછામાં ઓછી NAV</div><div class="ns-val loss">₹${lowEntry.nav.toFixed(2)}</div><div class="ns-date">${fmtDate(lowEntry.date)}</div></div>
         <div class="ns-item"><div class="ns-lbl">વધુમાં વધુ NAV</div><div class="ns-val gain">₹${highEntry.nav.toFixed(2)}</div><div class="ns-date">${fmtDate(highEntry.date)}</div></div>
-        <div class="ns-item"><div class="ns-lbl">સરેરાશ NAV</div><div class="ns-val">₹${avgNav.toFixed(2)}</div><div class="ns-date">&nbsp;</div></div>
+        <div class="ns-item"><div class="ns-lbl">મારી સરેરાશ NAV</div><div class="ns-val">₹${myAvgNav.toFixed(2)}</div><div class="ns-date">&nbsp;</div></div>
       `;
     } else {
       navStatsEl.innerHTML = '';
     }
 
-    // build buy markers: {x: index-of-nearest-label, y: nav-on-purchase-day}
-    const buyPoints = (s.transactions||[])
-      .filter(t=>t.source==='lumpsum' || t.source==='topup')
-      .map(t=>{
-        let idx = labels.indexOf(t.date);
-        if(idx===-1){
-          // find nearest date on-or-before
-          const target = new Date(t.date);
-          const navEntry = findNavOnOrBefore(historyAsc, target);
-          idx = navEntry ? labels.indexOf(toISODate(navEntry.date)) : null;
-        }
-        return idx===null ? null : {x: idx, y: t.nav, date:t.date, amount:t.amount};
-      })
-      .filter(Boolean);
-
-    const ctx = document.getElementById('fundNavChart').getContext('2d');
-    if(fundNavChartInstance) fundNavChartInstance.destroy();
-    fundNavChartInstance = new Chart(ctx, {
-      type:'line',
-      data:{
-        labels,
-        datasets:[
-          {
-            label:'NAV',
-            data: navData,
-            borderColor:'#4CAF50',
-            backgroundColor:'rgba(76,175,80,0.10)',
-            fill:true,
-            tension:0.25,
-            pointRadius:0,
-            borderWidth:2
-          },
-          {
-            type:'scatter',
-            label:'Lumpsum ખરીદી',
-            data: buyPoints.map(p=>({x:p.x, y:p.y})),
-            backgroundColor:'#D32F2F',
-            pointRadius:5,
-            pointHoverRadius:7,
-            showLine:false
-          }
-        ]
-      },
-      options:{
-        responsive:true,
-        plugins:{
-          legend:{ display:true, labels:{ font:{size:10}, color:'#6B7785' } },
-          tooltip:{
-            callbacks:{
-              title: (items)=> labels[items[0].dataIndex] || '',
-            }
-          }
-        },
-        scales:{
-          x:{ ticks:{ maxTicksLimit:6, font:{size:9}, color:'#6B7785' }, grid:{display:false} },
-          y:{ ticks:{ font:{size:10}, color:'#6B7785' }, grid:{color:'rgba(107,119,133,0.12)'} }
-        }
-      }
+    // મહિનાવાર (monthly) સાદો line graph — દરેક મહિનાની છેલ્લી ઉપલબ્ધ NAV
+    const monthlyMap = new Map();
+    sinceHistory.forEach(h=>{
+      const key = h.date.getFullYear() + '-' + String(h.date.getMonth()+1).padStart(2,'0');
+      monthlyMap.set(key, h); // later entries overwrite → last NAV of that month survives
     });
+    const monthlyEntries = [...monthlyMap.values()].sort((a,b)=>a.date-b.date);
+    const monthlyLabels = monthlyEntries.map(h=> h.date.toLocaleDateString('en-GB',{month:'short', year:'2-digit'}));
+    const monthlyNav = monthlyEntries.map(h=> h.nav);
 
-    if(buyPoints.length){
-      legendEl.innerHTML = '🔴 લાલ ટપકાં = જ્યાં Lumpsum/SIP થી ખરીદી કરી (' + buyPoints.length + ' વાર)';
-    }
+    // Chart.js CDN પર આધાર રાખવાને બદલે સીધું <canvas> પર જ સાદો line
+    // graph દોરવામાં આવે છે — એટલે internet/CDN block હોય તો પણ graph
+    // ક્યારેય ખાલી/broken નહીં રહે.
+    drawSimpleLineChart('fundNavChart', monthlyLabels, monthlyNav);
+    legendEl.innerHTML = firstInvestDate
+      ? 'ગ્રાફ તમારા પહેલા રોકાણ (' + fmtDate(firstInvestDate) + ') થી અત્યાર સુધીનો, મહિનાવાર NAV બતાવે છે.'
+      : '';
   }catch(e){
+    console.error('fund graph error', e);
     statusEl.textContent = 'NAV લાવવામાં તકલીફ પડી. ઇન્ટરનેટ કનેક્શન ચેક કરો.';
   }
 }
@@ -796,6 +875,14 @@ function parseLocalDate(s){
   // silently dropped when the start date fell on the chosen SIP day)
   const [y,m,day] = s.split('-').map(Number);
   return new Date(y, m-1, day);
+}
+function getAmcName(scheme){
+  // નવા ફંડ ઉમેરો ત્યારે AMFI ના meta.fund_house પરથી amc સચવાય છે.
+  // જૂના (પહેલેથી ઉમેરેલા) ફંડ માટે એ ફિલ્ડ ના હોય તો scheme name માંથી
+  // "Fund" શબ્દ પહેલાનો ભાગ કાઢી AMC નામ તારવવામાં આવે છે.
+  if(scheme.amc) return scheme.amc;
+  const m = scheme.schemeName.split(/\bFund\b/i);
+  return (m[0] || scheme.schemeName).trim();
 }
 function applyLatestNav(s, latest){
   // ચેક કર્યાનો date/time ત્યારે જ બદલવો જ્યારે AMFI પરથી ખરેખર નવી (નવી
@@ -1064,6 +1151,7 @@ async function saveFund(){
       id: 'f_' + Date.now(),
       schemeCode: selectedScheme.schemeCode,
       schemeName: selectedScheme.schemeName,
+      amc: (meta && meta.fund_house) || '',
       type: itype,
       sipConfig,
       transactions,
@@ -1252,6 +1340,7 @@ async function renderDashboard(){
     listEl.innerHTML = '';
     emptyEl.style.display = 'block';
     summaryBlock.style.display = 'none';
+    document.getElementById('amc-wise-block').style.display = 'none';
     return;
   }
   emptyEl.style.display = 'none';
@@ -1340,6 +1429,49 @@ async function renderDashboard(){
   const portfolioCashflows = allCashflows.concat([{date:new Date(latestDate), amount: totalCurrent}]);
   const portRate = xirr(portfolioCashflows);
   document.getElementById('s-xirr').textContent = portRate!==null ? (portRate*100).toFixed(1)+'%' : '—';
+
+  // AMC (ફંડ હાઉસ) મુજબ નફો — દરેક AMC ના બધા ફંડ ભેગા કરીને રોકાણ/વર્તમાન/નફો
+  const amcBlock = document.getElementById('amc-wise-block');
+  const amcListEl = document.getElementById('amc-wise-list');
+  const amcMap = new Map();
+  metricsList.forEach(({scheme, m})=>{
+    const amc = getAmcName(scheme);
+    if(!amcMap.has(amc)) amcMap.set(amc, {invested:0, current:0, count:0});
+    const a = amcMap.get(amc);
+    a.invested += m.invested;
+    a.current += m.currentValue;
+    a.count += 1;
+  });
+  const amcRows = [...amcMap.entries()].sort((a,b)=> b[1].current - a[1].current);
+  if(amcRows.length){
+    amcBlock.style.display = 'block';
+    amcListEl.innerHTML = amcRows.map(([amc, a])=>{
+      const gain = a.current - a.invested;
+      const gainPct = a.invested>0 ? (gain/a.invested*100) : 0;
+      const gc = gain>=0 ? 'gain' : 'loss';
+      const fundsInAmc = metricsList.filter(({scheme})=> getAmcName(scheme)===amc);
+      return `
+        <details class="amc-row">
+          <summary class="amc-summary">
+            <span class="amc-name">${escapeHtml(amc)}</span>
+            <span class="amc-sub">${a.count} ફંડ</span>
+          </summary>
+          <div class="amc-detail">
+            <div class="amc-detail-top">
+              <div><div class="ns-lbl">રોકાણ</div><div class="ns-val">${fmtINR(a.invested)}</div></div>
+              <div><div class="ns-lbl">વર્તમાન</div><div class="ns-val">${fmtINR(a.current)}</div></div>
+              <div><div class="ns-lbl">નફો/ખોટ</div><div class="ns-val ${gc}">${fmtINR(gain)} (${gainPct>=0?'+':''}${gainPct.toFixed(1)}%)</div></div>
+            </div>
+            ${fundsInAmc.map(({scheme, m})=>{
+              const fg = m.gain>=0?'gain':'loss';
+              return `<div class="amc-fund-line"><span>${escapeHtml(scheme.schemeName)}</span><span class="${fg}">${fmtINR(m.gain)}</span></div>`;
+            }).join('')}
+          </div>
+        </details>`;
+    }).join('');
+  } else {
+    amcBlock.style.display = 'none';
+  }
 
   fetchAllHistoriesAndRender(schemes);
 }
