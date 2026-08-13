@@ -1316,6 +1316,7 @@ async function renderDashboard(){
         </div>
         <textarea class="comment" data-id="${scheme.id}" onblur="updateComment('${scheme.id}', this.value)" placeholder="નોંધ લખો...">${scheme.comment||''}</textarea>
         <div class="fund-actions">
+          <button onclick="showFundGraph('${scheme.id}')">📊 ગ્રાફ જુઓ</button>
           <button onclick="addTopup('${scheme.id}')">➕ Lumpsum ઉમેરો</button>
           ${scheme.type==='sip' ? `<button onclick="toggleSipStatus('${scheme.id}')">${scheme.sipConfig.status==='stopped' ? '▶️ ફરી ચાલુ કરો' : '⏸ SIP બંધ કરો'}</button>` : ''}
           <button class="danger" onclick="deleteFund('${scheme.id}')">🗑 કાઢી નાખો</button>
