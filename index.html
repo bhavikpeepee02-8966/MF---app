@@ -190,6 +190,7 @@
 
   .nav-line{ font-size:11.5px; color:var(--ink-soft); margin:6px 0 10px; }
   .nav-line b{ color:var(--ink); font-family:'IBM Plex Mono',monospace; }
+  #graph-current-nav b{ color:var(--ink); font-family:'IBM Plex Mono',monospace; }
   .taxfree-line{ font-size:11.5px; color:var(--ink-soft); margin:0 0 10px; }
   .taxfree-line b{ color:var(--green); font-family:'IBM Plex Mono',monospace; }
 
@@ -534,6 +535,7 @@
     <div style="background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:16px; max-width:480px; width:100%; box-shadow:0 12px 30px rgba(0,0,0,0.2); max-height:88vh; overflow-y:auto;">
       <div id="graph-title" style="font-family:'Noto Sans Gujarati',sans-serif; font-weight:700; font-size:14px; color:var(--ink); margin-bottom:10px;"></div>
       <div id="graph-status" style="font-size:12.5px; color:var(--ink-soft);"></div>
+      <div id="graph-current-nav" style="font-size:12.5px; color:var(--ink-soft); margin-bottom:2px;"></div>
       <div class="chart-wrap" style="margin-top:8px;"><canvas id="fundNavChart"></canvas></div>
       <div id="graph-nav-stats" class="nav-stats-row"></div>
       <div id="graph-legend" style="font-size:11px; color:var(--ink-soft); margin-top:8px; line-height:1.5;"></div>
@@ -748,6 +750,31 @@ function drawSimpleLineChart(canvasId, labels, values){
     ctx.fill();
   });
 
+  // right-hand edge = today's/latest NAV — mark it clearly so it's obvious
+  // at a glance whether the line ended up above (costlier) or below
+  // (cheaper) compared to the rest of the graph
+  const lastIdx = values.length-1;
+  const lastX = xAt(lastIdx), lastY = yAt(values[lastIdx]);
+  ctx.beginPath();
+  ctx.arc(lastX, lastY, 4.5, 0, Math.PI*2);
+  ctx.fillStyle = '#1A73E8';
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.fillStyle = '#1A73E8';
+  ctx.font = 'bold 10px sans-serif';
+  const labelText = '₹' + values[lastIdx].toFixed(2);
+  const labelW = ctx.measureText(labelText).width;
+  // keep label inside the canvas — flip to the left of the point if it
+  // would otherwise spill past the right edge
+  const spillsRight = (lastX + 6 + labelW) > (cssW - padR);
+  ctx.textAlign = spillsRight ? 'right' : 'left';
+  const labelX = spillsRight ? lastX - 7 : lastX + 7;
+  const labelY = lastY < (padT + 12) ? lastY + 14 : lastY - 8;
+  ctx.fillText(labelText, labelX, labelY);
+
   // x-axis labels — show at most ~5 to avoid overlap on small screens
   ctx.fillStyle = '#6B7785';
   ctx.textAlign = 'center';
@@ -768,9 +795,11 @@ async function showFundGraph(schemeId){
   const statusEl = document.getElementById('graph-status');
   const titleEl = document.getElementById('graph-title');
   const legendEl = document.getElementById('graph-legend');
+  const currentNavEl = document.getElementById('graph-current-nav');
   titleEl.textContent = s.schemeName;
   statusEl.textContent = 'NAV ડેટા લાવી રહ્યા છીએ...';
   legendEl.innerHTML = '';
+  currentNavEl.innerHTML = `આજની NAV: <b>₹${s.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(s.lastNavDate)}</b>`;
   overlay.style.display = 'flex';
 
   try{
