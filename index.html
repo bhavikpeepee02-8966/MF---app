@@ -158,6 +158,7 @@
   .amc-fund-line .gain{ color:var(--green); font-weight:600; }
   .amc-fund-line .loss{ color:#D32F2F; font-weight:600; }
 
+
   /* ===== Fund card — ledger entry ===== */
   .fund-card{
     background:var(--paper); border:1px solid var(--line); border-radius:12px;
@@ -906,13 +907,27 @@ function parseLocalDate(s){
   const [y,m,day] = s.split('-').map(Number);
   return new Date(y, m-1, day);
 }
+const KNOWN_AMC_NAMES = [
+  'Aditya Birla Sun Life','ICICI Prudential','Nippon India','Franklin Templeton',
+  'Canara Robeco','Baroda BNP Paribas','Bank of India','Mirae Asset','PGIM India',
+  'Motilal Oswal','Invesco India','Old Bridge','Quant Mutual','JM Financial',
+  'WhiteOak Capital','Sundaram','Bandhan','Kotak','Axis','HDFC','UTI','DSP',
+  'Tata','HSBC','Union','Groww','Navi','Edelweiss','Helios','Shriram','Trust',
+  'Taurus','Samco','360 ONE','IDFC','ITI','LIC','SBI','NJ'
+];
 function getAmcName(scheme){
   // નવા ફંડ ઉમેરો ત્યારે AMFI ના meta.fund_house પરથી amc સચવાય છે.
-  // જૂના (પહેલેથી ઉમેરેલા) ફંડ માટે એ ફિલ્ડ ના હોય તો scheme name માંથી
-  // "Fund" શબ્દ પહેલાનો ભાગ કાઢી AMC નામ તારવવામાં આવે છે.
   if(scheme.amc) return scheme.amc;
-  const m = scheme.schemeName.split(/\bFund\b/i);
-  return (m[0] || scheme.schemeName).trim();
+  // જૂના ફંડ માટે એ ફિલ્ડ ના હોય તો scheme name ના શરૂઆતના શબ્દો પરથી
+  // જાણીતા AMC નામોની યાદી સાથે સરખાવીને AMC તારવવામાં આવે છે — ફક્ત
+  // "Fund" શબ્દ પહેલાનું બધું લેવાથી "HDFC Flexi Cap" અને "HDFC Mid Cap"
+  // બે અલગ AMC તરીકે ગણાઈ જતા હતા (બંને ખરેખર HDFC જ છે).
+  const name = scheme.schemeName;
+  const match = KNOWN_AMC_NAMES
+    .filter(amc => new RegExp('^' + amc.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'i').test(name))
+    .sort((a,b)=> b.length - a.length)[0];
+  if(match) return match;
+  return (name.split(/\bFund\b/i)[0] || name).trim().split(/\s+/)[0];
 }
 function applyLatestNav(s, latest){
   // ચેક કર્યાનો date/time ત્યારે જ બદલવો જ્યારે AMFI પરથી ખરેખર નવી (નવી
