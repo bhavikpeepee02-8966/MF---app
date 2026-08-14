@@ -1803,12 +1803,10 @@ async function addSipToFund(id){
   if(!s) return;
   if(s.sipConfig){ await showAlertM('આ ફંડમાં પહેલેથી SIP ચાલુ છે.'); return; }
 
-  const startVal = await showPromptM('SIP શરૂઆતની તારીખ (YYYY-MM-DD):', toISODate(new Date()));
+  const startVal = await showPromptM('SIP શરૂઆતની તારીખ (YYYY-MM-DD) — દા.ત. તમે ગયા મહિને 12 તારીખે શરૂ કરી હોય તો એ તારીખ:', toISODate(new Date()));
   if(!startVal) return;
-  const dayStr = await showPromptM('SIP તારીખ (મહિનાની કઈ તારીખે, દા.ત. 5):', '5');
-  if(dayStr===null) return;
-  const day = parseInt(dayStr,10);
-  if(!day || day<1 || day>31){ await showAlertM('યોગ્ય તારીખ (1-31) નાખો.'); return; }
+  const startDate = parseLocalDate(startVal);
+  const day = startDate.getDate(); // મહિનાની SIP તારીખ — start date પરથી જ આપોઆપ નક્કી થાય છે, અલગ પૂછવાની જરૂર નથી
   const amountStr = await showPromptM('SIP રકમ (₹):', '');
   if(amountStr===null) return;
   const amount = parseFloat(amountStr);
@@ -1817,7 +1815,6 @@ async function addSipToFund(id){
   showProcessOverlay('Processing... NAV લાવી રહ્યા છીએ');
   try{
     const { historyAsc } = await getSchemeHistory(s.schemeCode);
-    const startDate = parseLocalDate(startVal);
     // SIP તારીખ (દા.ત. 5) ની NAV નહીં, પણ એના પછીના દિવસની (કે રજા/
     // weekend હોય તો એ પછીના પહેલા trading day ની) NAV વપરાય છે.
     const installs = generateSipInstallments(startDate, day, new Date(), amount, historyAsc);
