@@ -317,6 +317,8 @@
     color:var(--green); background:rgba(76,175,80,0.12); border-radius:5px; padding:1px 5px; margin-left:5px;
     vertical-align:middle;
   }
+  .xfer-tag{ color:#1A73E8; background:rgba(26,115,232,0.12); }
+  .pending-tag{ color:#B26A00; background:rgba(255,152,0,0.15); }
   .lump-row .actions{ flex:0 0 auto; display:flex; gap:6px; }
   .lump-row .actions button{
     border:1px solid var(--line); background:var(--ivory-soft); border-radius:7px; padding:5px 8px;
@@ -663,6 +665,8 @@ async function renderLumpsumEntries(){
     (s.transactions||[]).forEach((t, idx)=>{
       if(t.source==='lumpsum' || t.source==='topup' || t.source==='sip'){
         entries.push({schemeId:s.id, schemeCode:s.schemeName, schemeName:s.schemeName, arrIndex:idx, date:t.date, amount:t.amount, source:t.source});
+      } else if(t.source==='transfer-out' || t.source==='transfer-in'){
+        entries.push({schemeId:s.id, schemeCode:s.schemeName, schemeName:s.schemeName, arrIndex:idx, date:t.date, amount: t.status==='pending' ? t.pendingAmount : t.amount, source:t.source, otherSchemeName:t.otherSchemeName, pending: t.status==='pending'});
       }
     });
   });
@@ -682,23 +686,30 @@ async function renderLumpsumEntries(){
     return;
   }
 
-  const total = entries.reduce((sum,e)=> sum + e.amount, 0);
+  const total = entries.reduce((sum,e)=> sum + (e.source==='transfer-out' ? 0 : e.amount), 0);
   summaryEl.textContent = `કુલ ${entries.length} એન્ટ્રી — ${fmtINR(total)}`;
 
-  listEl.innerHTML = entries.map((e,idx)=>`
+  listEl.innerHTML = entries.map((e,idx)=>{
+    let tag = '';
+    if(e.source==='sip') tag = '<span class="sip-tag">SIP</span>';
+    else if(e.source==='transfer-out') tag = '<span class="sip-tag xfer-tag">→ ' + escapeHtml(e.otherSchemeName||'') + '</span>';
+    else if(e.source==='transfer-in') tag = '<span class="sip-tag xfer-tag">← ' + escapeHtml(e.otherSchemeName||'') + '</span>' + (e.pending ? '<span class="sip-tag pending-tag">⏳ Pending</span>' : '');
+    const isTransfer = e.source==='transfer-out' || e.source==='transfer-in';
+    const amtText = (e.source==='transfer-out' ? '-' : '') + fmtINR(Math.abs(e.amount));
+    return `
     <div class="lump-row">
       <div class="sr">${idx+1}</div>
       <div class="mid">
-        <div class="fname" onclick="showFundGraph('${e.schemeId}')">${escapeHtml(e.schemeName)} ${e.source==='sip' ? '<span class="sip-tag">SIP</span>' : ''}</div>
+        <div class="fname" onclick="showFundGraph('${e.schemeId}')">${escapeHtml(e.schemeName)} ${tag}</div>
         <div class="fdate">${fmtDate(e.date)}</div>
       </div>
-      <div class="amt">${fmtINR(e.amount)}</div>
+      <div class="amt">${amtText}</div>
       <div class="actions">
-        <button onclick="editLumpEntry('${e.schemeId}', ${e.arrIndex})">✎</button>
-        <button class="del" onclick="deleteLumpEntry('${e.schemeId}', ${e.arrIndex})">✕</button>
+        ${isTransfer ? '' : `<button onclick="editLumpEntry('${e.schemeId}', ${e.arrIndex})">✎</button>`}
+        <button class="del" onclick="${isTransfer ? `cancelTransfer('${e.schemeId}', ${e.arrIndex})` : `deleteLumpEntry('${e.schemeId}', ${e.arrIndex})`}">✕</button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 async function editLumpEntry(schemeId, arrIndex){
@@ -1677,6 +1688,9 @@ async function renderDashboard(){
           <button onclick="addTopup('${scheme.id}')">➕ Lumpsum ઉમેરો</button>
           ${!scheme.sipConfig ? `<button onclick="addSipToFund('${scheme.id}')">➕ SIP ઉમેરો</button>` : ''}
           ${scheme.sipConfig ? `<button onclick="toggleSipStatus('${scheme.id}')">${scheme.sipConfig.status==='stopped' ? '▶️ SIP ફરી ચાલુ કરો' : '⏸ SIP બંધ કરો'}</button>` : ''}
+          ${scheme.sipConfig ? `<button onclick="editSipConfig('${scheme.id}')">✎ SIP તારીખ/રકમ Edit</button>` : ''}
+          ${scheme.sipConfig ? `<button class="danger" onclick="removeSipFromFund('${scheme.id}')">🗑 SIP કાઢો</button>` : ''}
+          <button onclick="startTransfer('${scheme.id}')">🔁 ટ્રાન્સફર કરો</button>
           <button class="danger" onclick="deleteFund('${scheme.id}')">🗑 કાઢી નાખો</button>
         </div>
       </div>`;
@@ -1790,12 +1804,158 @@ async function toggleSipStatus(id){
   await renderDashboardKeepScroll();
 }
 
+async function editSipConfig(id){
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===id);
+  if(!s || !s.sipConfig) return;
+
+  const newStartVal = await showPromptM('SIP શરૂઆતની સાચી તારીખ (YYYY-MM-DD):', s.sipConfig.startDate);
+  if(!newStartVal) return;
+  const newAmountStr = await showPromptM('SIP રકમ (₹):', s.sipConfig.amount);
+  if(newAmountStr===null) return;
+  const newAmount = parseFloat(newAmountStr);
+  if(!newAmount || newAmount<=0){ await showAlertM('યોગ્ય રકમ નાખો.'); return; }
+
+  showProcessOverlay('Processing... NAV લાવી રહ્યા છીએ');
+  try{
+    const { historyAsc } = await getSchemeHistory(s.schemeCode);
+    const newStartDate = parseLocalDate(newStartVal);
+    const newDay = newStartDate.getDate(); // તારીખ પરથી જ SIP day આપોઆપ નક્કી થાય
+    const installs = generateSipInstallments(newStartDate, newDay, new Date(), newAmount, historyAsc);
+    if(!installs.length){
+      finishProcessOverlay(false, 'Not complete. આ ગાળા માટે NAV ડેટા ના મળ્યો.');
+      return;
+    }
+    const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'}));
+    // જૂના બધા SIP હપ્તા (ખોટી તારીખ/રકમ વાળા) કાઢીને નવેસરથી સાચી
+    // વિગતો પ્રમાણે બનાવવા — excludedDates પણ સાફ, કારણ કે તારીખનો આધાર જ બદલાઈ ગયો
+    s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
+    s.sipConfig = { amount:newAmount, startDate:newStartVal, dayOfMonth:newDay, status:'active', stopDate:null, excludedDates: [] };
+    const latest = historyAsc[historyAsc.length-1];
+    applyLatestNav(s, latest);
+    await saveSchemes(schemes);
+    await renderDashboardKeepScroll();
+    finishProcessOverlay(true, '🎉 Congratulations! SIP વિગતો સુધારાઈ ગઈ — બધા હપ્તા નવેસરથી બન્યા.');
+  }catch(e){
+    finishProcessOverlay(false, 'Not complete. NAV લાવવામાં તકલીફ પડી, ઇન્ટરનેટ ચેક કરો.');
+  }
+}
+
+async function removeSipFromFund(id){
+  const ok = await showConfirm('આ ફંડમાંથી SIP સંપૂર્ણપણે કાઢી નાખવો છે? SIP ના બધા હપ્તા ડિલીટ થઈ જશે (Lumpsum/Topup entries એમ જ રહેશે). આ પગલું પાછું નહીં લઈ શકાય.');
+  if(!ok) return;
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===id);
+  if(!s) return;
+  s.transactions = s.transactions.filter(t=>t.source!=='sip');
+  s.sipConfig = null;
+  await saveSchemes(schemes);
+  await renderDashboardKeepScroll();
+}
+
+
 async function deleteFund(id){
   const ok = await showConfirm('આ ફંડ ટ્રેકિંગમાંથી કાઢી નાખવું છે? આ પગલું પાછું નહીં લઈ શકાય.');
   if(!ok) return;
   const schemes = await loadSchemes();
   const filtered = schemes.filter(x=>x.id!==id);
   await saveSchemes(filtered);
+  await renderDashboardKeepScroll();
+}
+
+async function startTransfer(sourceId){
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===sourceId);
+  if(!s) return;
+  const others = schemes.filter(x=>x.id!==sourceId);
+  if(!others.length){ await showAlertM('બીજું કોઈ ફંડ ઉમેરેલું નથી. પહેલા destination ફંડ ઉમેરો.'); return; }
+
+  const listText = others.map((o,i)=> (i+1)+'. '+o.schemeName).join('\n');
+  const idxStr = await showPromptM('કયા ફંડમાં ટ્રાન્સફર કરવું છે? નંબર લખો:\n'+listText, '1');
+  if(idxStr===null) return;
+  const idx = parseInt(idxStr,10);
+  if(!idx || idx<1 || idx>others.length){ await showAlertM('યોગ્ય નંબર નાખો.'); return; }
+  const dest = others[idx-1];
+
+  const dateVal = await showPromptM('ટ્રાન્સફરની તારીખ (YYYY-MM-DD):', toISODate(new Date()));
+  if(!dateVal) return;
+  const amountStr = await showPromptM('કેટલી રકમ ટ્રાન્સફર કરવી છે (₹):', '');
+  if(amountStr===null) return;
+  const amount = parseFloat(amountStr);
+  if(!amount || amount<=0){ await showAlertM('યોગ્ય રકમ નાખો.'); return; }
+
+  showProcessOverlay('Processing... NAV લાવી રહ્યા છીએ');
+  try{
+    const { historyAsc: srcHist } = await getSchemeHistory(s.schemeCode);
+    const d = parseLocalDate(dateVal);
+    const srcNavEntry = findNavOnOrBefore(srcHist, d) || srcHist[0];
+    const srcCurrentUnits = s.transactions.reduce((sum,t)=>sum+t.units,0);
+    const srcCurrentValue = srcCurrentUnits * srcNavEntry.nav;
+    if(amount > srcCurrentValue + 0.01){
+      finishProcessOverlay(false, 'Not complete. આ ફંડમાં એટલી રકમ ઉપલબ્ધ નથી (વર્તમાન કિંમત: ' + fmtINR(srcCurrentValue) + ').');
+      return;
+    }
+    const transferId = 'xfer_' + Date.now();
+    const unitsOut = amount / srcNavEntry.nav;
+
+    // source ફંડમાંથી બાદ (redemption) — negative amount/units
+    s.transactions.push({
+      date: toISODate(d), amount: -amount, units: -unitsOut, nav: srcNavEntry.nav,
+      source:'transfer-out', transferId, otherSchemeName: dest.schemeName,
+      txId: 't_' + Date.now()
+    });
+
+    // destination ફંડમાં — બીજા દિવસની (કે રજા/weekend હોય તો પછીના પહેલા
+    // trading day ની) NAV વપરાય, જેમ SIP માટે
+    const { historyAsc: dstHist } = await getSchemeHistory(dest.schemeCode);
+    const nextDay = new Date(d.getFullYear(), d.getMonth(), d.getDate()+1);
+    const dstNavEntry = findNavOnOrAfter(dstHist, nextDay);
+    const destScheme = schemes.find(x=>x.id===dest.id);
+    if(dstNavEntry){
+      destScheme.transactions.push({
+        date: toISODate(dstNavEntry.date), amount: amount, units: amount/dstNavEntry.nav, nav: dstNavEntry.nav,
+        source:'transfer-in', transferId, otherSchemeName: s.schemeName,
+        txId: 't_' + Date.now() + '_2'
+      });
+    } else {
+      // હજુ બીજા દિવસની NAV AMFI પર આવી નથી — ⏳ Pending રાખવું, આગલી
+      // auto-refresh વખતે NAV મળે એટલે આપોઆપ પૂરું (finalize) થઈ જશે
+      destScheme.transactions.push({
+        date: toISODate(nextDay), amount: 0, units: 0, nav: 0,
+        source:'transfer-in', transferId, otherSchemeName: s.schemeName,
+        status:'pending', pendingAmount: amount, txId: 't_' + Date.now() + '_2'
+      });
+    }
+
+    const srcLatest = srcHist[srcHist.length-1];
+    applyLatestNav(s, srcLatest);
+    const dstLatest = dstHist[dstHist.length-1];
+    applyLatestNav(destScheme, dstLatest);
+
+    await saveSchemes(schemes);
+    await renderDashboardKeepScroll();
+    finishProcessOverlay(true, dstNavEntry
+      ? '🎉 Congratulations! ટ્રાન્સફર થઈ ગયું.'
+      : '🎉 Congratulations! ટ્રાન્સફર નોંધાયું — destination ફંડમાં NAV આવવાની રાહ જોવાય છે (⏳ Pending), આપોઆપ પૂરું થઈ જશે.');
+  }catch(e){
+    finishProcessOverlay(false, 'Not complete. NAV લાવવામાં તકલીફ પડી, ઇન્ટરનેટ ચેક કરો.');
+  }
+}
+
+async function cancelTransfer(schemeId, arrIndex){
+  const ok = await showConfirm('આ ટ્રાન્સફર રદ કરવું છે? બંને ફંડમાંથી (જ્યાંથી ને જ્યાં ગયું) એ એન્ટ્રી કાઢી નાખવામાં આવશે. આ પગલું પાછું નહીં લઈ શકાય.');
+  if(!ok) return;
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===schemeId);
+  if(!s) return;
+  const tx = s.transactions[arrIndex];
+  if(!tx || !tx.transferId) return;
+  const transferId = tx.transferId;
+  schemes.forEach(sc=>{
+    sc.transactions = sc.transactions.filter(t=> t.transferId !== transferId);
+  });
+  await saveSchemes(schemes);
+  await renderLumpsumEntries();
   await renderDashboardKeepScroll();
 }
 
@@ -1877,6 +2037,7 @@ async function refreshOneFund(id){
       const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'})).filter(t=>!excluded1.has(t.date));
       s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
     }
+    resolvePendingTransfersIn(s, historyAsc);
     await saveSchemes(schemes);
     await renderDashboardKeepScroll();
   }catch(e){
@@ -1898,11 +2059,33 @@ async function refreshAllFunds(){
         const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'})).filter(t=>!excluded2.has(t.date));
         s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
       }
+      resolvePendingTransfersIn(s, historyAsc);
     }catch(e){ console.error('refresh failed for', s.schemeName, e); }
   }
   await saveSchemes(schemes);
   await renderDashboardKeepScroll();
 }
+
+// ટ્રાન્સફર (STP) ની destination બાજુ — જ્યારે NAV હજુ AMFI પર આવી ના હોય
+// ત્યારે ⏳ Pending રાખેલી હોય, એ entries ને refresh વખતે ચેક કરીને,
+// NAV મળી જાય કે તરત પૂરી (finalize) કરવી.
+function resolvePendingTransfersIn(scheme, historyAsc){
+  (scheme.transactions||[]).forEach(t=>{
+    if(t.source==='transfer-in' && t.status==='pending'){
+      const targetDate = parseLocalDate(t.date);
+      const navEntry = findNavOnOrAfter(historyAsc, targetDate);
+      if(navEntry){
+        t.date = toISODate(navEntry.date);
+        t.nav = navEntry.nav;
+        t.amount = t.pendingAmount;
+        t.units = t.pendingAmount / navEntry.nav;
+        delete t.status;
+        delete t.pendingAmount;
+      }
+    }
+  });
+}
+
 
 /* =========================================================
    FUND HEALTH METRICS (CAGR, Volatility, Max Drawdown, Sharpe)
