@@ -312,6 +312,11 @@
     white-space:nowrap;
   }
   .lump-row .mid .fname{ cursor:pointer; }
+  .sip-tag{
+    display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:700;
+    color:var(--green); background:rgba(76,175,80,0.12); border-radius:5px; padding:1px 5px; margin-left:5px;
+    vertical-align:middle;
+  }
   .lump-row .actions{ flex:0 0 auto; display:flex; gap:6px; }
   .lump-row .actions button{
     border:1px solid var(--line); background:var(--ivory-soft); border-radius:7px; padding:5px 8px;
@@ -650,13 +655,14 @@ async function renderLumpsumEntries(){
   filterSel.innerHTML = optionsHtml.join('');
   filterSel.value = schemes.some(s=>s.id===prevFilter) ? prevFilter : 'all';
 
-  // gather all lumpsum-type entries (initial lumpsum + later topups) across funds
+  // gather all lumpsum-type entries (initial lumpsum + later topups) AND
+  // SIP installments across funds — edit/delete works the same way for both
   // keep arrIndex = position within that scheme's transactions array, for edit/delete
   let entries = [];
   schemes.forEach(s=>{
     (s.transactions||[]).forEach((t, idx)=>{
-      if(t.source==='lumpsum' || t.source==='topup'){
-        entries.push({schemeId:s.id, schemeCode:s.schemeName, schemeName:s.schemeName, arrIndex:idx, date:t.date, amount:t.amount});
+      if(t.source==='lumpsum' || t.source==='topup' || t.source==='sip'){
+        entries.push({schemeId:s.id, schemeCode:s.schemeName, schemeName:s.schemeName, arrIndex:idx, date:t.date, amount:t.amount, source:t.source});
       }
     });
   });
@@ -683,7 +689,7 @@ async function renderLumpsumEntries(){
     <div class="lump-row">
       <div class="sr">${idx+1}</div>
       <div class="mid">
-        <div class="fname" onclick="showFundGraph('${e.schemeId}')">${escapeHtml(e.schemeName)}</div>
+        <div class="fname" onclick="showFundGraph('${e.schemeId}')">${escapeHtml(e.schemeName)} ${e.source==='sip' ? '<span class="sip-tag">SIP</span>' : ''}</div>
         <div class="fdate">${fmtDate(e.date)}</div>
       </div>
       <div class="amt">${fmtINR(e.amount)}</div>
@@ -701,6 +707,8 @@ async function editLumpEntry(schemeId, arrIndex){
   if(!s) return;
   const tx = s.transactions[arrIndex];
   if(!tx) return;
+  const wasSip = tx.source==='sip';
+  const oldDate = tx.date;
 
   const newDate = await showPromptM('તારીખ (YYYY-MM-DD):', tx.date);
   if(!newDate) return;
@@ -718,6 +726,17 @@ async function editLumpEntry(schemeId, arrIndex){
     tx.amount = newAmount;
     tx.nav = navEntry.nav;
     tx.units = newAmount / navEntry.nav;
+    if(wasSip){
+      // હવે આ entry manually edit થઈ ગઈ — એટલે 'topup' બનાવી દેવી જેથી
+      // આગલી વખત SIP auto-refresh આ entry ને ફરીથી લખી (overwrite કરી)
+      // ના નાખે. જૂની તારીખ excludedDates માં ઉમેરવી જેથી regen વખતે
+      // એ જ SIP હપ્તો ડુપ્લિકેટ ના બની જાય.
+      tx.source = 'topup';
+      if(s.sipConfig){
+        s.sipConfig.excludedDates = s.sipConfig.excludedDates || [];
+        if(!s.sipConfig.excludedDates.includes(oldDate)) s.sipConfig.excludedDates.push(oldDate);
+      }
+    }
     const latest = historyAsc[historyAsc.length-1];
     applyLatestNav(s, latest);
     await saveSchemes(schemes);
@@ -735,6 +754,13 @@ async function deleteLumpEntry(schemeId, arrIndex){
   const schemes = await loadSchemes();
   const s = schemes.find(x=>x.id===schemeId);
   if(!s) return;
+  const tx = s.transactions[arrIndex];
+  if(tx && tx.source==='sip' && s.sipConfig){
+    // SIP હપ્તો delete કર્યો — એ તારીખ excludedDates માં ઉમેરવી, નહીં તો
+    // આગલી auto-refresh વખતે એ જ હપ્તો ફરી બની જશે.
+    s.sipConfig.excludedDates = s.sipConfig.excludedDates || [];
+    if(!s.sipConfig.excludedDates.includes(tx.date)) s.sipConfig.excludedDates.push(tx.date);
+  }
   s.transactions.splice(arrIndex, 1);
   await saveSchemes(schemes);
   await renderLumpsumEntries();
@@ -1363,7 +1389,7 @@ async function saveFund(){
       const endDate = (status==='stopped' && stopVal) ? parseLocalDate(stopVal) : new Date();
       const installs = generateSipInstallments(startDate, day, endDate, amount, historyAsc);
       transactions = installs.map(i=>({date: toISODate(i.date), amount: i.amount, units: i.units, nav: i.nav, source:'sip'}));
-      sipConfig = { amount, startDate: startVal, dayOfMonth: day, status, stopDate: stopVal || null };
+      sipConfig = { amount, startDate: startVal, dayOfMonth: day, status, stopDate: stopVal || null, excludedDates: [] };
       if(!transactions.length){
         statusEl.innerHTML = '<div class="status-msg err">આ સમયગાળા માટે NAV ડેટા મળ્યો નહીં.</div>';
         finishProcessOverlay(false, 'Not complete. NAV ડેટા મળ્યો નહીં.');
@@ -1778,7 +1804,8 @@ async function toggleSipStatus(id){
       const { historyAsc } = await getSchemeHistory(s.schemeCode);
       const startDate = parseLocalDate(s.sipConfig.startDate);
       const installs = generateSipInstallments(startDate, s.sipConfig.dayOfMonth, new Date(), s.sipConfig.amount, historyAsc);
-      const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'}));
+      const excluded = new Set(s.sipConfig.excludedDates || []);
+      const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'})).filter(t=>!excluded.has(t.date));
       s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
       const latest = historyAsc[historyAsc.length-1];
       applyLatestNav(s, latest);
@@ -1824,7 +1851,7 @@ async function addSipToFund(id){
     }
     const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'}));
     s.transactions = s.transactions.concat(sipTx); // હાલના lumpsum/topup સાથે ભેગું — એક જ ફંડની કુલ ગણતરીમાં
-    s.sipConfig = { amount, startDate: startVal, dayOfMonth: day, status:'active', stopDate: null };
+    s.sipConfig = { amount, startDate: startVal, dayOfMonth: day, status:'active', stopDate: null, excludedDates: [] };
     const latest = historyAsc[historyAsc.length-1];
     applyLatestNav(s, latest);
     await saveSchemes(schemes);
@@ -1871,7 +1898,8 @@ async function refreshOneFund(id){
     if(s.sipConfig && s.sipConfig.status==='active'){
       const startDate = parseLocalDate(s.sipConfig.startDate);
       const installs = generateSipInstallments(startDate, s.sipConfig.dayOfMonth, new Date(), s.sipConfig.amount, historyAsc);
-      const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'}));
+      const excluded1 = new Set(s.sipConfig.excludedDates || []);
+      const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'})).filter(t=>!excluded1.has(t.date));
       s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
     }
     await saveSchemes(schemes);
@@ -1891,7 +1919,8 @@ async function refreshAllFunds(){
       if(s.sipConfig && s.sipConfig.status==='active'){
         const startDate = parseLocalDate(s.sipConfig.startDate);
         const installs = generateSipInstallments(startDate, s.sipConfig.dayOfMonth, new Date(), s.sipConfig.amount, historyAsc);
-        const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'}));
+        const excluded2 = new Set(s.sipConfig.excludedDates || []);
+        const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'})).filter(t=>!excluded2.has(t.date));
         s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
       }
     }catch(e){ console.error('refresh failed for', s.schemeName, e); }
