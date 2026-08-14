@@ -128,32 +128,14 @@
   .nav-stats-row .ns-val.loss{ color:#D32F2F; }
   .nav-stats-row .ns-date{ font-size:9.5px; color:var(--ink-soft); margin-top:2px; }
 
-  .amc-row{
-    background:var(--paper); border:1px solid var(--line); border-radius:10px;
-    margin-bottom:8px; overflow:hidden; cursor:pointer;
-  }
-  .amc-summary{
-    display:flex; align-items:center; justify-content:space-between; gap:10px;
-    padding:12px 14px;
-  }
-  .amc-summary::after{ content:'↗'; color:var(--ink-soft); margin-left:8px; }
-  .amc-summary .amc-name{ font-weight:600; font-size:13px; color:var(--ink); }
-  .amc-summary .amc-sub{ font-size:11px; color:var(--ink-soft); }
-  .amc-detail{ padding:0 14px 12px; border-top:1px solid var(--line); }
-  .amc-detail-top{
+  .compare-detail-top{
     display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;
     margin:10px 0 8px;
   }
-  .amc-detail-top .ns-lbl{ font-size:10px; color:var(--ink-soft); }
-  .amc-detail-top .ns-val{ font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:12.5px; color:var(--ink); }
-  .amc-detail-top .ns-val.gain{ color:var(--green); }
-  .amc-detail-top .ns-val.loss{ color:#D32F2F; }
-  .amc-fund-line{
-    display:flex; justify-content:space-between; gap:8px; font-size:11.5px;
-    color:var(--ink-soft); padding:4px 0; border-top:1px dashed var(--line);
-  }
-  .amc-fund-line .gain{ color:var(--green); font-weight:600; }
-  .amc-fund-line .loss{ color:#D32F2F; font-weight:600; }
+  .compare-detail-top .ns-lbl{ font-size:10px; color:var(--ink-soft); }
+  .compare-detail-top .ns-val{ font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:12.5px; color:var(--ink); }
+  .compare-detail-top .ns-val.gain{ color:var(--green); }
+  .compare-detail-top .ns-val.loss{ color:#D32F2F; }
 
   /* ===== Compare (સરખામણી) ===== */
   .compare-check-wrap{
@@ -418,21 +400,16 @@
       </div>
     </div>
 
-    <div id="amc-wise-block" style="display:none; margin-bottom:18px;">
-      <h3 style="font-size:14px; margin:0 0 8px 2px;">AMC મુજબ નફો</h3>
-      <div id="amc-wise-list"></div>
-    </div>
-
     <input type="file" id="restore-file-input" accept="application/json,.json" style="display:none;" onchange="restoreBackup(this.files[0])">
+
+    <div style="display:flex; gap:8px; margin-bottom:18px;">
+      <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="downloadBackup()">⬆️ JSON Backup</button>
+      <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="document.getElementById('restore-file-input').click()">⬇️ Backup Restore</button>
+    </div>
 
     <div id="fund-list"></div>
     <div class="empty" id="empty-state">
       હજુ કોઈ ફંડ ઉમેર્યું નથી.<br>ઉપર "ફંડ ઉમેરો" ટેબમાં જઈને પહેલું ફંડ ઉમેરો.
-    </div>
-
-    <div style="display:flex; gap:8px; margin-top:18px;">
-      <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="downloadBackup()">⬇️ JSON Backup</button>
-      <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="document.getElementById('restore-file-input').click()">⬆️ Backup Restore</button>
     </div>
   </section>
 
@@ -578,15 +555,6 @@
     </div>
   </div>
 
-  <!-- ============ AMC DETAIL MODAL ============ -->
-  <div id="amc-detail-overlay" style="display:none; position:fixed; inset:0; background:rgba(20,30,25,0.55); z-index:1000; align-items:center; justify-content:center; padding:16px;">
-    <div style="background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:16px; max-width:480px; width:100%; box-shadow:0 12px 30px rgba(0,0,0,0.2); max-height:88vh; overflow-y:auto;">
-      <div id="amc-detail-title" style="font-family:'Noto Sans Gujarati',sans-serif; font-weight:700; font-size:15px; color:var(--ink); margin-bottom:10px;"></div>
-      <div id="amc-detail-body"></div>
-      <button onclick="document.getElementById('amc-detail-overlay').style.display='none';" style="margin-top:14px; width:100%; padding:11px; border-radius:9px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font-weight:600; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">બંધ કરો</button>
-    </div>
-  </div>
-
   <!-- ============ COMPARE (સરખામણી) MODAL ============ -->
   <div id="compare-overlay" style="display:none; position:fixed; inset:0; background:rgba(20,30,25,0.55); z-index:1000; align-items:center; justify-content:center; padding:16px;">
     <div style="background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:16px; max-width:480px; width:100%; box-shadow:0 12px 30px rgba(0,0,0,0.2); max-height:88vh; overflow-y:auto;">
@@ -612,7 +580,6 @@
    STORAGE
    ========================================================= */
 const STORAGE_KEY = 'mf_schemes_v1';
-let amcDetailCache = [];        // index → {title, body}, AMC modal માટે
 let selectedForCompare = new Set(); // સરખામણી માટે પસંદ કરેલા scheme id
 
 async function loadSchemes(){
@@ -851,13 +818,6 @@ function drawSimpleLineChart(canvasId, labels, values){
     }
   });
 }
-function openAmcModal(idx){
-  const entry = amcDetailCache[idx];
-  if(!entry) return;
-  document.getElementById('amc-detail-title').textContent = entry.title;
-  document.getElementById('amc-detail-body').innerHTML = entry.body;
-  document.getElementById('amc-detail-overlay').style.display = 'flex';
-}
 
 /* =========================================================
    COMPARE (સરખામણી) — 2-3 ફંડ ભેગા કરીને સંયુક્ત ગણતરી
@@ -897,7 +857,7 @@ async function openCompareModal(){
   const gc = totalGain>=0 ? 'gain':'loss';
 
   const body = `
-    <div class="amc-detail-top">
+    <div class="compare-detail-top">
       <div><div class="ns-lbl">કુલ રોકાણ</div><div class="ns-val">${fmtINR(totalInvested)}</div></div>
       <div><div class="ns-lbl">કુલ વર્તમાન</div><div class="ns-val">${fmtINR(totalCurrent)}</div></div>
       <div><div class="ns-lbl">કુલ નફો/ખોટ</div><div class="ns-val ${gc}">${fmtINR(totalGain)} (${totalGainPct>=0?'+':''}${totalGainPct.toFixed(1)}%)</div></div>
@@ -1033,28 +993,6 @@ function parseLocalDate(s){
   // silently dropped when the start date fell on the chosen SIP day)
   const [y,m,day] = s.split('-').map(Number);
   return new Date(y, m-1, day);
-}
-const KNOWN_AMC_NAMES = [
-  'Aditya Birla Sun Life','ICICI Prudential','Nippon India','Franklin Templeton',
-  'Canara Robeco','Baroda BNP Paribas','Bank of India','Mirae Asset','PGIM India',
-  'Motilal Oswal','Invesco India','Old Bridge','Quant Mutual','JM Financial',
-  'WhiteOak Capital','Sundaram','Bandhan','Kotak','Axis','HDFC','UTI','DSP',
-  'Tata','HSBC','Union','Groww','Navi','Edelweiss','Helios','Shriram','Trust',
-  'Taurus','Samco','360 ONE','IDFC','ITI','LIC','SBI','NJ'
-];
-function getAmcName(scheme){
-  // નવા ફંડ ઉમેરો ત્યારે AMFI ના meta.fund_house પરથી amc સચવાય છે.
-  if(scheme.amc) return scheme.amc;
-  // જૂના ફંડ માટે એ ફિલ્ડ ના હોય તો scheme name ના શરૂઆતના શબ્દો પરથી
-  // જાણીતા AMC નામોની યાદી સાથે સરખાવીને AMC તારવવામાં આવે છે — ફક્ત
-  // "Fund" શબ્દ પહેલાનું બધું લેવાથી "HDFC Flexi Cap" અને "HDFC Mid Cap"
-  // બે અલગ AMC તરીકે ગણાઈ જતા હતા (બંને ખરેખર HDFC જ છે).
-  const name = scheme.schemeName;
-  const match = KNOWN_AMC_NAMES
-    .filter(amc => new RegExp('^' + amc.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'i').test(name))
-    .sort((a,b)=> b.length - a.length)[0];
-  if(match) return match;
-  return (name.split(/\bFund\b/i)[0] || name).trim().split(/\s+/)[0];
 }
 function applyLatestNav(s, latest){
   // ચેક કર્યાનો date/time ત્યારે જ બદલવો જ્યારે AMFI પરથી ખરેખર નવી (નવી
@@ -1512,7 +1450,6 @@ async function renderDashboard(){
     listEl.innerHTML = '';
     emptyEl.style.display = 'block';
     summaryBlock.style.display = 'none';
-    document.getElementById('amc-wise-block').style.display = 'none';
     selectedForCompare.clear();
     updateCompareBar();
     return;
@@ -1534,11 +1471,30 @@ async function renderDashboard(){
     return { scheme, m };
   });
 
-  // પર્ફોર્મન્સ મુજબ ક્રમ (rank) — સૌથી સારો નફો % ધરાવતું ફંડ પહેલા,
-  // પછી ઉતરતા ક્રમમાં. કાર્ડ્સ આ ક્રમમાં જ બતાવાય છે.
-  const rankedList = [...metricsList].sort((a,b)=> b.m.gainPct - a.m.gainPct);
+  // ફિક્સ ક્રમ — તમે કહ્યા મુજબ: HDFC Flexicap, Motilal Oswal Midcap,
+  // HDFC Midcap, Nippon Midcap, SBI, Bandhan Small — બાકીના ફંડ છેલ્લે,
+  // મૂળ ક્રમમાં.
+  const FIXED_ORDER_KEYWORDS = [
+    ['hdfc','flexi'],
+    ['motilal'],
+    ['hdfc','mid'],
+    ['nippon','mid'],
+    ['sbi'],
+    ['bandhan','small']
+  ];
+  function fixedOrderRank(schemeName){
+    const n = schemeName.toLowerCase();
+    for(let i=0;i<FIXED_ORDER_KEYWORDS.length;i++){
+      if(FIXED_ORDER_KEYWORDS[i].every(kw=> n.includes(kw))) return i;
+    }
+    return FIXED_ORDER_KEYWORDS.length; // યાદીમાં ન હોય એ છેલ્લે
+  }
+  const rankedList = metricsList
+    .map((item, origIdx)=> ({ item, origIdx, rk: fixedOrderRank(item.scheme.schemeName) }))
+    .sort((a,b)=> (a.rk - b.rk) || (a.origIdx - b.origIdx))
+    .map(x=> x.item);
 
-  rankedList.forEach(({scheme, m}, rankIdx)=>{
+  rankedList.forEach(({scheme, m})=>{
     const gainClass = m.gain>=0 ? 'gain':'loss';
     const stoppedClass = (scheme.type==='sip' && scheme.sipConfig && scheme.sipConfig.status==='stopped') ? 'stopped' : '';
     const badgeText = scheme.type==='sip'
@@ -1570,7 +1526,7 @@ async function renderDashboard(){
       <div class="fund-card ${stoppedClass}">
         <div class="fund-head">
           <div>
-            <div class="name"><span class="rank-badge">#${rankIdx+1}</span>${scheme.schemeName}</div>
+            <div class="name">${scheme.schemeName}</div>
             <div class="code">Code: ${scheme.schemeCode}</div>
           </div>
           <span class="${badgeClass}">${badgeText}</span>
@@ -1623,54 +1579,6 @@ async function renderDashboard(){
   const portfolioCashflows = allCashflows.concat([{date:new Date(latestDate), amount: totalCurrent}]);
   const portRate = xirr(portfolioCashflows);
   document.getElementById('s-xirr').textContent = portRate!==null ? (portRate*100).toFixed(1)+'%' : '—';
-
-  // AMC (ફંડ હાઉસ) મુજબ નફો — દરેક AMC ના બધા ફંડ ભેગા કરીને રોકાણ/વર્તમાન/નફો
-  const amcBlock = document.getElementById('amc-wise-block');
-  const amcListEl = document.getElementById('amc-wise-list');
-  const amcMap = new Map();
-  metricsList.forEach(({scheme, m})=>{
-    const amc = getAmcName(scheme);
-    if(!amcMap.has(amc)) amcMap.set(amc, {invested:0, current:0, count:0});
-    const a = amcMap.get(amc);
-    a.invested += m.invested;
-    a.current += m.currentValue;
-    a.count += 1;
-  });
-  const amcRows = [...amcMap.entries()].sort((a,b)=> b[1].current - a[1].current);
-  // દરેક AMC નું વિગતવાર HTML અગાઉથી બનાવીને cache માં રાખવું — ક્લિક
-  // કરતાં એ જ box (modal) માં ફંડ ભેગા બતાવવા માટે, inline expand નહીં.
-  amcDetailCache = [];
-  if(amcRows.length){
-    amcBlock.style.display = 'block';
-    amcListEl.innerHTML = amcRows.map(([amc, a], idx)=>{
-      const gain = a.current - a.invested;
-      const gainPct = a.invested>0 ? (gain/a.invested*100) : 0;
-      const gc = gain>=0 ? 'gain' : 'loss';
-      const fundsInAmc = metricsList.filter(({scheme})=> getAmcName(scheme)===amc);
-      amcDetailCache[idx] = {
-        title: amc,
-        body: `
-        <div class="amc-detail-top">
-          <div><div class="ns-lbl">રોકાણ</div><div class="ns-val">${fmtINR(a.invested)}</div></div>
-          <div><div class="ns-lbl">વર્તમાન</div><div class="ns-val">${fmtINR(a.current)}</div></div>
-          <div><div class="ns-lbl">નફો/ખોટ</div><div class="ns-val ${gc}">${fmtINR(gain)} (${gainPct>=0?'+':''}${gainPct.toFixed(1)}%)</div></div>
-        </div>
-        ${fundsInAmc.map(({scheme, m})=>{
-          const fg = m.gain>=0?'gain':'loss';
-          return `<div class="amc-fund-line"><span>${escapeHtml(scheme.schemeName)}</span><span class="${fg}">${fmtINR(m.gain)}</span></div>`;
-        }).join('')}`
-      };
-      return `
-        <div class="amc-row" onclick="openAmcModal(${idx})">
-          <div class="amc-summary">
-            <span class="amc-name">${escapeHtml(amc)}</span>
-            <span class="amc-sub">${a.count} ફંડ</span>
-          </div>
-        </div>`;
-    }).join('');
-  } else {
-    amcBlock.style.display = 'none';
-  }
 
   updateCompareBar();
 
