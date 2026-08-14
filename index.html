@@ -130,16 +130,13 @@
 
   .amc-row{
     background:var(--paper); border:1px solid var(--line); border-radius:10px;
-    margin-bottom:8px; overflow:hidden;
+    margin-bottom:8px; overflow:hidden; cursor:pointer;
   }
-  .amc-row summary{ list-style:none; cursor:pointer; }
-  .amc-row summary::-webkit-details-marker{ display:none; }
   .amc-summary{
     display:flex; align-items:center; justify-content:space-between; gap:10px;
     padding:12px 14px;
   }
-  .amc-summary::after{ content:'▸'; color:var(--ink-soft); margin-left:8px; }
-  .amc-row[open] .amc-summary::after{ content:'▾'; }
+  .amc-summary::after{ content:'↗'; color:var(--ink-soft); margin-left:8px; }
   .amc-summary .amc-name{ font-weight:600; font-size:13px; color:var(--ink); }
   .amc-summary .amc-sub{ font-size:11px; color:var(--ink-soft); }
   .amc-detail{ padding:0 14px 12px; border-top:1px solid var(--line); }
@@ -157,6 +154,42 @@
   }
   .amc-fund-line .gain{ color:var(--green); font-weight:600; }
   .amc-fund-line .loss{ color:#D32F2F; font-weight:600; }
+
+  /* ===== Compare (સરખામણી) ===== */
+  .compare-check-wrap{
+    display:flex; align-items:center; gap:6px; padding:8px 0 2px;
+    font-size:11.5px; color:var(--ink-soft);
+  }
+  .compare-check-wrap input{ width:16px; height:16px; accent-color:var(--maroon-dark); }
+  .compare-bar{
+    position:fixed; left:0; right:0; bottom:0; z-index:900;
+    background:var(--maroon-deep); color:#EAFBF7;
+    padding:12px 16px; display:none; align-items:center; justify-content:space-between;
+    gap:10px; box-shadow:0 -6px 18px rgba(8,20,32,0.35);
+  }
+  .compare-bar.show{ display:flex; }
+  .compare-bar .cb-text{ font-size:12.5px; }
+  .compare-bar button{
+    padding:9px 14px; border-radius:9px; border:none; background:#EAFBF7;
+    color:var(--maroon-deep); font-weight:700; font-family:'Noto Sans Gujarati',sans-serif;
+    font-size:12.5px; cursor:pointer;
+  }
+  .compare-bar .cb-clear{
+    background:transparent; color:#EAFBF7; border:1.5px solid rgba(234,251,247,0.5);
+    font-weight:600; padding:9px 12px;
+  }
+  .rank-badge{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:22px; height:22px; padding:0 5px; border-radius:7px;
+    background:var(--green-bg); color:var(--green); font-weight:700; font-size:11.5px;
+    font-family:'IBM Plex Mono',monospace; margin-right:6px;
+  }
+  .compare-fund-row{
+    display:grid; grid-template-columns:1fr auto auto; gap:8px; align-items:center;
+    font-size:11.5px; padding:6px 0; border-top:1px dashed var(--line);
+  }
+  .compare-fund-row .cfr-name{ color:var(--ink); }
+  .compare-fund-row .cfr-val{ font-family:'IBM Plex Mono',monospace; text-align:right; }
 
 
   /* ===== Fund card — ledger entry ===== */
@@ -545,6 +578,33 @@
     </div>
   </div>
 
+  <!-- ============ AMC DETAIL MODAL ============ -->
+  <div id="amc-detail-overlay" style="display:none; position:fixed; inset:0; background:rgba(20,30,25,0.55); z-index:1000; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:16px; max-width:480px; width:100%; box-shadow:0 12px 30px rgba(0,0,0,0.2); max-height:88vh; overflow-y:auto;">
+      <div id="amc-detail-title" style="font-family:'Noto Sans Gujarati',sans-serif; font-weight:700; font-size:15px; color:var(--ink); margin-bottom:10px;"></div>
+      <div id="amc-detail-body"></div>
+      <button onclick="document.getElementById('amc-detail-overlay').style.display='none';" style="margin-top:14px; width:100%; padding:11px; border-radius:9px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font-weight:600; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">બંધ કરો</button>
+    </div>
+  </div>
+
+  <!-- ============ COMPARE (સરખામણી) MODAL ============ -->
+  <div id="compare-overlay" style="display:none; position:fixed; inset:0; background:rgba(20,30,25,0.55); z-index:1000; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:16px; max-width:480px; width:100%; box-shadow:0 12px 30px rgba(0,0,0,0.2); max-height:88vh; overflow-y:auto;">
+      <div style="font-family:'Noto Sans Gujarati',sans-serif; font-weight:700; font-size:15px; color:var(--ink); margin-bottom:10px;">ફંડ સરખામણી — સંયુક્ત ગણતરી</div>
+      <div id="compare-body"></div>
+      <button onclick="document.getElementById('compare-overlay').style.display='none';" style="margin-top:14px; width:100%; padding:11px; border-radius:9px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font-weight:600; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">બંધ કરો</button>
+    </div>
+  </div>
+
+  <!-- ============ COMPARE SELECTION BAR ============ -->
+  <div id="compare-bar" class="compare-bar">
+    <span class="cb-text" id="compare-bar-text">0 ફંડ પસંદ કર્યા</span>
+    <div style="display:flex; gap:8px;">
+      <button class="cb-clear" onclick="clearCompareSelection()">રદ કરો</button>
+      <button onclick="openCompareModal()">સરખાવો</button>
+    </div>
+  </div>
+
 </main>
 
 <script>
@@ -552,6 +612,8 @@
    STORAGE
    ========================================================= */
 const STORAGE_KEY = 'mf_schemes_v1';
+let amcDetailCache = [];        // index → {title, body}, AMC modal માટે
+let selectedForCompare = new Set(); // સરખામણી માટે પસંદ કરેલા scheme id
 
 async function loadSchemes(){
   try{
@@ -789,6 +851,71 @@ function drawSimpleLineChart(canvasId, labels, values){
     }
   });
 }
+function openAmcModal(idx){
+  const entry = amcDetailCache[idx];
+  if(!entry) return;
+  document.getElementById('amc-detail-title').textContent = entry.title;
+  document.getElementById('amc-detail-body').innerHTML = entry.body;
+  document.getElementById('amc-detail-overlay').style.display = 'flex';
+}
+
+/* =========================================================
+   COMPARE (સરખામણી) — 2-3 ફંડ ભેગા કરીને સંયુક્ત ગણતરી
+   ========================================================= */
+function toggleCompareSelect(id, checked){
+  if(checked) selectedForCompare.add(id);
+  else selectedForCompare.delete(id);
+  updateCompareBar();
+}
+function clearCompareSelection(){
+  selectedForCompare.clear();
+  document.querySelectorAll('.compare-check').forEach(cb=> cb.checked=false);
+  updateCompareBar();
+}
+function updateCompareBar(){
+  const bar = document.getElementById('compare-bar');
+  const n = selectedForCompare.size;
+  document.getElementById('compare-bar-text').textContent = n + ' ફંડ પસંદ કર્યા';
+  bar.classList.toggle('show', n>0);
+}
+async function openCompareModal(){
+  if(selectedForCompare.size<2){
+    await showAlertM('સરખામણી માટે ઓછામાં ઓછા 2 ફંડ પસંદ કરો.');
+    return;
+  }
+  const schemes = await loadSchemes();
+  const picked = schemes.filter(s=> selectedForCompare.has(s.id));
+  let totalInvested=0, totalCurrent=0;
+  const rows = picked.map(s=>{
+    const m = computeSchemeMetrics(s);
+    totalInvested += m.invested;
+    totalCurrent += m.currentValue;
+    return { scheme:s, m };
+  }).sort((a,b)=> b.m.gainPct - a.m.gainPct);
+  const totalGain = totalCurrent - totalInvested;
+  const totalGainPct = totalInvested>0 ? (totalGain/totalInvested*100) : 0;
+  const gc = totalGain>=0 ? 'gain':'loss';
+
+  const body = `
+    <div class="amc-detail-top">
+      <div><div class="ns-lbl">કુલ રોકાણ</div><div class="ns-val">${fmtINR(totalInvested)}</div></div>
+      <div><div class="ns-lbl">કુલ વર્તમાન</div><div class="ns-val">${fmtINR(totalCurrent)}</div></div>
+      <div><div class="ns-lbl">કુલ નફો/ખોટ</div><div class="ns-val ${gc}">${fmtINR(totalGain)} (${totalGainPct>=0?'+':''}${totalGainPct.toFixed(1)}%)</div></div>
+    </div>
+    <div style="margin-top:6px;">
+      ${rows.map(({scheme, m})=>{
+        const fg = m.gain>=0?'gain':'loss';
+        return `<div class="compare-fund-row">
+          <span class="cfr-name">${escapeHtml(scheme.schemeName)}</span>
+          <span class="cfr-val">${fmtINR(m.invested)} → ${fmtINR(m.currentValue)}</span>
+          <span class="cfr-val ${fg}">${fmtINR(m.gain)} (${m.gainPct.toFixed(1)}%)</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+  document.getElementById('compare-body').innerHTML = body;
+  document.getElementById('compare-overlay').style.display = 'flex';
+}
+
 async function showFundGraph(schemeId){
   const schemes = await loadSchemes();
   const s = schemes.find(x=>x.id===schemeId);
@@ -1386,6 +1513,8 @@ async function renderDashboard(){
     emptyEl.style.display = 'block';
     summaryBlock.style.display = 'none';
     document.getElementById('amc-wise-block').style.display = 'none';
+    selectedForCompare.clear();
+    updateCompareBar();
     return;
   }
   emptyEl.style.display = 'none';
@@ -1405,7 +1534,11 @@ async function renderDashboard(){
     return { scheme, m };
   });
 
-  metricsList.forEach(({scheme, m})=>{
+  // પર્ફોર્મન્સ મુજબ ક્રમ (rank) — સૌથી સારો નફો % ધરાવતું ફંડ પહેલા,
+  // પછી ઉતરતા ક્રમમાં. કાર્ડ્સ આ ક્રમમાં જ બતાવાય છે.
+  const rankedList = [...metricsList].sort((a,b)=> b.m.gainPct - a.m.gainPct);
+
+  rankedList.forEach(({scheme, m}, rankIdx)=>{
     const gainClass = m.gain>=0 ? 'gain':'loss';
     const stoppedClass = (scheme.type==='sip' && scheme.sipConfig && scheme.sipConfig.status==='stopped') ? 'stopped' : '';
     const badgeText = scheme.type==='sip'
@@ -1422,11 +1555,22 @@ async function renderDashboard(){
       return days>=365 ? sum + (t.units * scheme.lastNav) : sum;
     }, 0);
 
+    // SIP ફંડમાં પછીથી Lumpsum ઉમેર્યું હોય તો રોકાણ રકમને SIP વિરુદ્ધ
+    // અલગથી ઉમેરેલ (topup) — એમ બે ભાગમાં અલગ બતાવવું.
+    let sipBreakdownHtml = '';
+    if(scheme.type==='sip'){
+      const sipInvested = scheme.transactions.filter(t=>t.source==='sip').reduce((s,t)=>s+t.amount,0);
+      const topupInvested = scheme.transactions.filter(t=>t.source!=='sip').reduce((s,t)=>s+t.amount,0);
+      if(topupInvested>0){
+        sipBreakdownHtml = `<div class="taxfree-line">SIP રોકાણ: <b>${fmtINR(sipInvested)}</b> · અલગથી ઉમેરેલ (Lumpsum): <b>${fmtINR(topupInvested)}</b></div>`;
+      }
+    }
+
     cardsHtml += `
       <div class="fund-card ${stoppedClass}">
         <div class="fund-head">
           <div>
-            <div class="name">${scheme.schemeName}</div>
+            <div class="name"><span class="rank-badge">#${rankIdx+1}</span>${scheme.schemeName}</div>
             <div class="code">Code: ${scheme.schemeCode}</div>
           </div>
           <span class="${badgeClass}">${badgeText}</span>
@@ -1443,12 +1587,17 @@ async function renderDashboard(){
         </div>
         <div class="nav-line">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b> · ચેક કર્યું: ${new Date(scheme.lastCheckedAt).toLocaleString('en-IN')}</div>
         <div class="taxfree-line">ટેક્સ-ફ્રી ઉપાડ યોગ્ય રકમ (1 વર્ષ+): <b>${fmtINR(taxFreeAmount)}</b></div>
+        ${sipBreakdownHtml}
         <div class="daychange-line" id="daychange-${scheme.id}"><span style="color:var(--ink-soft); font-size:11.5px;">આજનો ફેરફાર ગણાય છે...</span></div>
         <div class="health-block" id="health-${scheme.id}">
           <div class="h-title">ફંડ હેલ્થ</div>
           <div class="health-row"><span class="h-label">ગણતરી થાય છે...</span></div>
         </div>
         <textarea class="comment" data-id="${scheme.id}" onblur="updateComment('${scheme.id}', this.value)" placeholder="નોંધ લખો...">${scheme.comment||''}</textarea>
+        <label class="compare-check-wrap">
+          <input type="checkbox" class="compare-check" data-id="${scheme.id}" ${selectedForCompare.has(scheme.id)?'checked':''} onchange="toggleCompareSelect('${scheme.id}', this.checked)">
+          સરખામણી માટે પસંદ કરો
+        </label>
         <div class="fund-actions">
           <button onclick="showFundGraph('${scheme.id}')">📊 ગ્રાફ જુઓ</button>
           <button onclick="addTopup('${scheme.id}')">➕ Lumpsum ઉમેરો</button>
@@ -1488,35 +1637,42 @@ async function renderDashboard(){
     a.count += 1;
   });
   const amcRows = [...amcMap.entries()].sort((a,b)=> b[1].current - a[1].current);
+  // દરેક AMC નું વિગતવાર HTML અગાઉથી બનાવીને cache માં રાખવું — ક્લિક
+  // કરતાં એ જ box (modal) માં ફંડ ભેગા બતાવવા માટે, inline expand નહીં.
+  amcDetailCache = [];
   if(amcRows.length){
     amcBlock.style.display = 'block';
-    amcListEl.innerHTML = amcRows.map(([amc, a])=>{
+    amcListEl.innerHTML = amcRows.map(([amc, a], idx)=>{
       const gain = a.current - a.invested;
       const gainPct = a.invested>0 ? (gain/a.invested*100) : 0;
       const gc = gain>=0 ? 'gain' : 'loss';
       const fundsInAmc = metricsList.filter(({scheme})=> getAmcName(scheme)===amc);
+      amcDetailCache[idx] = {
+        title: amc,
+        body: `
+        <div class="amc-detail-top">
+          <div><div class="ns-lbl">રોકાણ</div><div class="ns-val">${fmtINR(a.invested)}</div></div>
+          <div><div class="ns-lbl">વર્તમાન</div><div class="ns-val">${fmtINR(a.current)}</div></div>
+          <div><div class="ns-lbl">નફો/ખોટ</div><div class="ns-val ${gc}">${fmtINR(gain)} (${gainPct>=0?'+':''}${gainPct.toFixed(1)}%)</div></div>
+        </div>
+        ${fundsInAmc.map(({scheme, m})=>{
+          const fg = m.gain>=0?'gain':'loss';
+          return `<div class="amc-fund-line"><span>${escapeHtml(scheme.schemeName)}</span><span class="${fg}">${fmtINR(m.gain)}</span></div>`;
+        }).join('')}`
+      };
       return `
-        <details class="amc-row">
-          <summary class="amc-summary">
+        <div class="amc-row" onclick="openAmcModal(${idx})">
+          <div class="amc-summary">
             <span class="amc-name">${escapeHtml(amc)}</span>
             <span class="amc-sub">${a.count} ફંડ</span>
-          </summary>
-          <div class="amc-detail">
-            <div class="amc-detail-top">
-              <div><div class="ns-lbl">રોકાણ</div><div class="ns-val">${fmtINR(a.invested)}</div></div>
-              <div><div class="ns-lbl">વર્તમાન</div><div class="ns-val">${fmtINR(a.current)}</div></div>
-              <div><div class="ns-lbl">નફો/ખોટ</div><div class="ns-val ${gc}">${fmtINR(gain)} (${gainPct>=0?'+':''}${gainPct.toFixed(1)}%)</div></div>
-            </div>
-            ${fundsInAmc.map(({scheme, m})=>{
-              const fg = m.gain>=0?'gain':'loss';
-              return `<div class="amc-fund-line"><span>${escapeHtml(scheme.schemeName)}</span><span class="${fg}">${fmtINR(m.gain)}</span></div>`;
-            }).join('')}
           </div>
-        </details>`;
+        </div>`;
     }).join('');
   } else {
     amcBlock.style.display = 'none';
   }
+
+  updateCompareBar();
 
   fetchAllHistoriesAndRender(schemes);
 }
