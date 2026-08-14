@@ -836,17 +836,8 @@ function drawSimpleLineChart(canvasId, labels, values, buyPoints){
     ctx.fill();
   });
 
-  // 🔴 તમારા Lumpsum/Topup ખરીદ-points — એ દિવસે ખરેખર જે NAV મળી હતી
-  ctx.fillStyle = '#D32F2F';
-  buyPoints.forEach(p=>{
-    const px = xAt(p.idx), py = yAt(p.nav);
-    ctx.beginPath();
-    ctx.arc(px, py, 3.5, 0, Math.PI*2);
-    ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  });
+  // (લાલ ટપકાં કાઢી નાખ્યા — line સાથે સરખાવવામાં confusing હતા, કારણ કે
+  // line મહિનાનો છેલ્લો ભાવ બતાવે છે જ્યારે ટપકાં ચોક્કસ દિવસનો ભાવ)
 
   // right-hand edge = today's/latest NAV — mark it clearly so it's obvious
   // at a glance whether the line ended up above (costlier) or below
@@ -1012,26 +1003,10 @@ async function showFundGraph(schemeId){
     // graph દોરવામાં આવે છે — એટલે internet/CDN block હોય તો પણ graph
     // ક્યારેય ખાલી/broken નહીં રહે.
 
-    // તમારા દરેક Lumpsum/Topup રોકાણની તારીખે તમને ખરેખર જે NAV મળી હતી
-    // (tx.nav) — એ points ને ગ્રાફ પર 🔴 લાલ ટપકાં તરીકે અલગથી બતાવવા,
-    // જેથી ખરીદ-ભાવ (line) સાથે સરખાવી શકાય.
-    const buyPoints = (s.transactions||[])
-      .filter(t=> t.source==='lumpsum' || t.source==='topup')
-      .map(t=>{
-        const txDate = parseLocalDate(t.date);
-        // આ ખરીદ-તારીખ કયા મહિનાની (monthlyEntries માં કયા index ની) નજીક છે
-        let idx = 0, bestDiff = Infinity;
-        monthlyEntries.forEach((h,i)=>{
-          const diff = Math.abs(h.date - txDate);
-          if(diff < bestDiff){ bestDiff = diff; idx = i; }
-        });
-        return { idx, nav: t.nav, date: t.date, amount: t.amount };
-      });
-
-    drawSimpleLineChart('fundNavChart', monthlyLabels, monthlyNav, buyPoints);
-    legendEl.innerHTML = (firstInvestDate
+    drawSimpleLineChart('fundNavChart', monthlyLabels, monthlyNav);
+    legendEl.innerHTML = firstInvestDate
       ? 'ગ્રાફ તમારા પહેલા રોકાણ (' + fmtDate(firstInvestDate) + ') થી અત્યાર સુધીનો, મહિનાવાર NAV બતાવે છે.'
-      : '') + (buyPoints.length ? '<br>🔴 લાલ ટપકાં = જ્યાં Lumpsum/Topup થી ખરીદી કરી (' + buyPoints.length + ' વાર)' : '');
+      : '';
   }catch(e){
     console.error('fund graph error', e);
     statusEl.textContent = 'NAV લાવવામાં તકલીફ પડી. ઇન્ટરનેટ કનેક્શન ચેક કરો.';
