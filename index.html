@@ -1666,11 +1666,12 @@ async function renderDashboard(){
           <div><div class="lbl">નફો/ખોટ</div><div class="val ${gainClass}">${fmtINR(m.gain)} (${m.gainPct.toFixed(1)}%)</div></div>
           <div><div class="lbl">XIRR</div><div class="val ${m.xirrPct>=0?'gain':'loss'}">${m.xirrPct!==null ? m.xirrPct.toFixed(1)+'%' : '—'}</div></div>
           <div><div class="lbl">એકમો (Units)</div><div class="val">${m.totalUnits.toFixed(3)}</div></div>
+          <div><div class="lbl">મારી સરેરાશ NAV</div><div class="val">${m.totalUnits>0 ? '₹'+(m.invested/m.totalUnits).toFixed(2) : '—'}</div></div>
           <div><div class="lbl">પોર્ટફોલિયો વેઇટ</div><div class="val">${portfolioWt.toFixed(2)}%</div></div>
           <div><div class="lbl">રોકાણ તારીખ</div><div class="val">${earliestDate ? fmtDate(earliestDate) : '—'}</div></div>
           <div><div class="lbl">રોકાણના દિવસો</div><div class="val">${holdingDays!==null ? holdingDays : '—'}</div></div>
         </div>
-        <div class="nav-line">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b> · ચેક કર્યું: ${new Date(scheme.lastCheckedAt).toLocaleString('en-IN')}</div>
+        <div class="nav-line">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b></div>
         <div class="taxfree-line">ટેક્સ-ફ્રી ઉપાડ યોગ્ય રકમ (1 વર્ષ+): <b>${fmtINR(taxFreeAmount)}</b></div>
         ${sipBreakdownHtml}
         <div class="daychange-line" id="daychange-${scheme.id}"><span style="color:var(--ink-soft); font-size:11.5px;">આજનો ફેરફાર ગણાય છે...</span></div>
