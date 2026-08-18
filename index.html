@@ -1259,12 +1259,21 @@ function generateSipInstallments(startDate, dayOfMonth, endDate, amount, history
     const day = Math.min(dayOfMonth, lastDay);
     const instDate = new Date(cursor.getFullYear(), cursor.getMonth(), day);
     if(instDate >= startDate && instDate <= hardEnd){
-      // SIP debit થાય એ તારીખ (instDate) ની NAV નહીં, પણ એના પછીના દિવસની
-      // (અથવા એ પછીનો પહેલો trading day) NAV વપરાય છે — SIP date 5 → NAV date 6
-      const navLookupDate = new Date(instDate.getFullYear(), instDate.getMonth(), instDate.getDate()+1);
-      const navEntry = findNavOnOrAfter(historyAsc, navLookupDate);
-      if(navEntry){
-        installments.push({date: instDate, amount: amount, units: amount/navEntry.nav, nav: navEntry.nav});
+      // વાસ્તવિક SIP કેવી રીતે ચાલે છે (2 સ્ટેપ):
+      // 1) SIP તારીખ (દા.ત. 15) એ trading day ના હોય (રજા/weekend) તો
+      //    રકમ debit એની પછીના પહેલા trading day એ કપાય (debit date)
+      // 2) NAV એ debit date ની પણ નહીં — એના પછીના (આગલા) trading day ની
+      //    મળે. દા.ત. 15-16 રજા હોય, debit 17ના (પહેલો trading day) થાય,
+      //    ને NAV 18ની (17 પછીનો પહેલો trading day) મળે.
+      const debitEntry = findNavOnOrAfter(historyAsc, instDate);
+      if(debitEntry){
+        const navLookupDate = new Date(debitEntry.date.getFullYear(), debitEntry.date.getMonth(), debitEntry.date.getDate()+1);
+        const navEntry = findNavOnOrAfter(historyAsc, navLookupDate);
+        if(navEntry){
+          // વ્યવહારમાં CAMS/KFin ના folio statement માં transaction ની
+          // તારીખ NAV/allotment ની તારીખ જ લખાય છે (debit ની તારીખ નહીં)
+          installments.push({date: navEntry.date, amount: amount, units: amount/navEntry.nav, nav: navEntry.nav});
+        }
       }
     }
     cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1);
