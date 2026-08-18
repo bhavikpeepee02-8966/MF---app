@@ -740,12 +740,13 @@ async function editLumpEntry(schemeId, arrIndex){
     if(wasSip){
       // હવે આ entry manually edit થઈ ગઈ — એટલે 'topup' બનાવી દેવી જેથી
       // આગલી વખત SIP auto-refresh આ entry ને ફરીથી લખી (overwrite કરી)
-      // ના નાખે. જૂની તારીખ excludedDates માં ઉમેરવી જેથી regen વખતે
-      // એ જ SIP હપ્તો ડુપ્લિકેટ ના બની જાય.
+      // ના નાખે. એ મહિનો excludedMonths માં ઉમેરવો (exact date નહીં, કારણ
+      // કે રજા/holiday ના કારણે regenerate વખતે exact તારીખ બદલાઈ શકે).
+      const oldMonthKey = tx.monthKey || oldDate.slice(0,7);
       tx.source = 'topup';
       if(s.sipConfig){
-        s.sipConfig.excludedDates = s.sipConfig.excludedDates || [];
-        if(!s.sipConfig.excludedDates.includes(oldDate)) s.sipConfig.excludedDates.push(oldDate);
+        s.sipConfig.excludedMonths = s.sipConfig.excludedMonths || [];
+        if(!s.sipConfig.excludedMonths.includes(oldMonthKey)) s.sipConfig.excludedMonths.push(oldMonthKey);
       }
     }
     const latest = historyAsc[historyAsc.length-1];
@@ -767,10 +768,12 @@ async function deleteLumpEntry(schemeId, arrIndex){
   if(!s) return;
   const tx = s.transactions[arrIndex];
   if(tx && tx.source==='sip' && s.sipConfig){
-    // SIP હપ્તો delete કર્યો — એ તારીખ excludedDates માં ઉમેરવી, નહીં તો
-    // આગલી auto-refresh વખતે એ જ હપ્તો ફરી બની જશે.
-    s.sipConfig.excludedDates = s.sipConfig.excludedDates || [];
-    if(!s.sipConfig.excludedDates.includes(tx.date)) s.sipConfig.excludedDates.push(tx.date);
+    // SIP હપ્તો delete કર્યો — એ મહિનો excludedMonths માં ઉમેરવો (exact
+    // date નહીં, રજા/holiday ના કારણે regenerate વખતે તારીખ બદલાઈ શકે),
+    // નહીં તો આગલી auto-refresh વખતે એ જ હપ્તો ફરી બની જશે.
+    const monthKey = tx.monthKey || tx.date.slice(0,7);
+    s.sipConfig.excludedMonths = s.sipConfig.excludedMonths || [];
+    if(!s.sipConfig.excludedMonths.includes(monthKey)) s.sipConfig.excludedMonths.push(monthKey);
   }
   s.transactions.splice(arrIndex, 1);
   await saveSchemes(schemes);
@@ -1271,8 +1274,12 @@ function generateSipInstallments(startDate, dayOfMonth, endDate, amount, history
         const navEntry = findNavOnOrAfter(historyAsc, navLookupDate);
         if(navEntry){
           // વ્યવહારમાં CAMS/KFin ના folio statement માં transaction ની
-          // તારીખ NAV/allotment ની તારીખ જ લખાય છે (debit ની તારીખ નહીં)
-          installments.push({date: navEntry.date, amount: amount, units: amount/navEntry.nav, nav: navEntry.nav});
+          // તારીખ NAV/allotment ની તારીખ જ લખાય છે (debit ની તારીખ નહીં).
+          // monthKey = એ હપ્તો કયા "નિયત મહિના" નો છે — રજા/holiday ના
+          // કારણે actual તારીખ મહિનો બદલાય નહીં ત્યાં સુધી આ જ રહે છે,
+          // exclude/edit ને exact date ને બદલે આ મહિના સાથે લિંક કરવા માટે.
+          const monthKey = cursor.getFullYear() + '-' + String(cursor.getMonth()+1).padStart(2,'0');
+          installments.push({date: navEntry.date, amount: amount, units: amount/navEntry.nav, nav: navEntry.nav, monthKey});
         }
       }
     }
@@ -1384,7 +1391,7 @@ async function saveFund(){
       const endDate = (status==='stopped' && stopVal) ? parseLocalDate(stopVal) : new Date();
       const installs = generateSipInstallments(startDate, day, endDate, amount, historyAsc);
       transactions = installs.map(i=>({date: toISODate(i.date), amount: i.amount, units: i.units, nav: i.nav, source:'sip'}));
-      sipConfig = { amount, startDate: startVal, dayOfMonth: day, status, stopDate: stopVal || null, excludedDates: [] };
+      sipConfig = { amount, startDate: startVal, dayOfMonth: day, status, stopDate: stopVal || null, excludedMonths: [] };
       if(!transactions.length){
         statusEl.innerHTML = '<div class="status-msg err">આ સમયગાળા માટે NAV ડેટા મળ્યો નહીં.</div>';
         finishProcessOverlay(false, 'Not complete. NAV ડેટા મળ્યો નહીં.');
@@ -1803,8 +1810,8 @@ async function toggleSipStatus(id){
       const { historyAsc } = await getSchemeHistory(s.schemeCode);
       const startDate = parseLocalDate(s.sipConfig.startDate);
       const installs = generateSipInstallments(startDate, s.sipConfig.dayOfMonth, new Date(), s.sipConfig.amount, historyAsc);
-      const excluded = new Set(s.sipConfig.excludedDates || []);
-      const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'})).filter(t=>!excluded.has(t.date));
+      const excluded = new Set(s.sipConfig.excludedMonths || []);
+      const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip', monthKey:i.monthKey})).filter(t=>!excluded.has(t.monthKey));
       s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
       const latest = historyAsc[historyAsc.length-1];
       applyLatestNav(s, latest);
@@ -1836,11 +1843,11 @@ async function editSipConfig(id){
       finishProcessOverlay(false, 'Not complete. આ ગાળા માટે NAV ડેટા ના મળ્યો.');
       return;
     }
-    const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'}));
+    const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip', monthKey:i.monthKey}));
     // જૂના બધા SIP હપ્તા (ખોટી તારીખ/રકમ વાળા) કાઢીને નવેસરથી સાચી
-    // વિગતો પ્રમાણે બનાવવા — excludedDates પણ સાફ, કારણ કે તારીખનો આધાર જ બદલાઈ ગયો
+    // વિગતો પ્રમાણે બનાવવા — excludedMonths પણ સાફ, કારણ કે તારીખનો આધાર જ બદલાઈ ગયો
     s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
-    s.sipConfig = { amount:newAmount, startDate:newStartVal, dayOfMonth:newDay, status:'active', stopDate:null, excludedDates: [] };
+    s.sipConfig = { amount:newAmount, startDate:newStartVal, dayOfMonth:newDay, status:'active', stopDate:null, excludedMonths: [] };
     const latest = historyAsc[historyAsc.length-1];
     applyLatestNav(s, latest);
     await saveSchemes(schemes);
@@ -1994,9 +2001,9 @@ async function addSipToFund(id){
       finishProcessOverlay(false, 'Not complete. આ ગાળા માટે NAV ડેટા ના મળ્યો.');
       return;
     }
-    const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'}));
+    const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip', monthKey:i.monthKey}));
     s.transactions = s.transactions.concat(sipTx); // હાલના lumpsum/topup સાથે ભેગું — એક જ ફંડની કુલ ગણતરીમાં
-    s.sipConfig = { amount, startDate: startVal, dayOfMonth: day, status:'active', stopDate: null, excludedDates: [] };
+    s.sipConfig = { amount, startDate: startVal, dayOfMonth: day, status:'active', stopDate: null, excludedMonths: [] };
     const latest = historyAsc[historyAsc.length-1];
     applyLatestNav(s, latest);
     await saveSchemes(schemes);
@@ -2043,8 +2050,8 @@ async function refreshOneFund(id){
     if(s.sipConfig && s.sipConfig.status==='active'){
       const startDate = parseLocalDate(s.sipConfig.startDate);
       const installs = generateSipInstallments(startDate, s.sipConfig.dayOfMonth, new Date(), s.sipConfig.amount, historyAsc);
-      const excluded1 = new Set(s.sipConfig.excludedDates || []);
-      const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'})).filter(t=>!excluded1.has(t.date));
+      const excluded1 = new Set(s.sipConfig.excludedMonths || []);
+      const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip', monthKey:i.monthKey})).filter(t=>!excluded1.has(t.monthKey));
       s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
     }
     resolvePendingTransfersIn(s, historyAsc);
@@ -2065,8 +2072,8 @@ async function refreshAllFunds(){
       if(s.sipConfig && s.sipConfig.status==='active'){
         const startDate = parseLocalDate(s.sipConfig.startDate);
         const installs = generateSipInstallments(startDate, s.sipConfig.dayOfMonth, new Date(), s.sipConfig.amount, historyAsc);
-        const excluded2 = new Set(s.sipConfig.excludedDates || []);
-        const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip'})).filter(t=>!excluded2.has(t.date));
+        const excluded2 = new Set(s.sipConfig.excludedMonths || []);
+        const sipTx = installs.map(i=>({date: toISODate(i.date), amount:i.amount, units:i.units, nav:i.nav, source:'sip', monthKey:i.monthKey})).filter(t=>!excluded2.has(t.monthKey));
         s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
       }
       resolvePendingTransfersIn(s, historyAsc);
