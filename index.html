@@ -1570,6 +1570,42 @@ async function restoreBackup(file){
 }
 
 
+// CAMS/બ્રોકર માંથી સાચા કુલ Units એકવાર નાખો — એપ સૌથી છેલ્લી (તાજેતરની
+// તારીખની) એન્ટ્રીના units માં ફરક ઉમેરી/બાદ કરીને કુલ સરવાળો બરાબર
+// એટલો જ કરી દેશે. બાકીની 20+ જૂની એન્ટ્રી manually edit કરવાની જરૂર નહીં પડે.
+async function matchUnitsToActual(schemeId){
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===schemeId);
+  if(!s || !s.transactions || !s.transactions.length){ await showAlertM('આ ફંડમાં કોઈ એન્ટ્રી નથી.'); return; }
+
+  const currentTotal = s.transactions.reduce((sum,t)=>sum+t.units,0);
+  const input = await showPromptM(
+    'CAMS/બ્રોકર મુજબ સાચા કુલ Units નાખો (અત્યારે એપમાં: ' + currentTotal.toFixed(3) + ')',
+    currentTotal.toFixed(3)
+  );
+  if(input===null) return;
+  const target = parseFloat(input);
+  if(!target || target<=0 || isNaN(target)){ await showAlertM('યોગ્ય Units નાખો.'); return; }
+
+  const diff = target - currentTotal;
+  if(Math.abs(diff) < 0.0000001){ await showAlertM('પહેલેથી જ મેચ થાય છે — ફેરફારની જરૂર નથી.'); return; }
+
+  // તાજેતરની તારીખવાળી (સૌથી છેલ્લી) એન્ટ્રી શોધો — negative/transfer-out
+  // (units<0) એન્ટ્રીને ટાળીને, જેથી ટ્રાન્સફર બગડે નહીં.
+  let latestIdx = -1;
+  s.transactions.forEach((t,i)=>{
+    if(t.units>0 && (latestIdx===-1 || t.date > s.transactions[latestIdx].date)) latestIdx = i;
+  });
+  if(latestIdx===-1) latestIdx = s.transactions.length-1;
+
+  s.transactions[latestIdx].units = s.transactions[latestIdx].units + diff;
+  if(s.transactions[latestIdx].units < 0) s.transactions[latestIdx].units = 0;
+
+  await saveSchemes(schemes);
+  await renderDashboardKeepScroll();
+  await showAlertM('થઈ ગયું — કુલ Units હવે ' + target.toFixed(3) + ' છે (ફેરફાર ' + (latestIdx+1) + 'મી એન્ટ્રીમાં કરવામાં આવ્યો).');
+}
+
 function computeSchemeMetrics(scheme){
   const totalUnits = scheme.transactions.reduce((s,t)=>s+t.units,0);
   const invested = scheme.transactions.reduce((s,t)=>s+t.amount,0);
@@ -1702,6 +1738,7 @@ async function renderDashboard(){
         </label>
         <div class="fund-actions">
           <button onclick="showFundGraph('${scheme.id}')">📊 ગ્રાફ જુઓ</button>
+          <button onclick="matchUnitsToActual('${scheme.id}')">🎯 Units મેચ કરો (CAMS)</button>
           <button onclick="addTopup('${scheme.id}')">➕ Lumpsum ઉમેરો</button>
           ${!scheme.sipConfig ? `<button onclick="addSipToFund('${scheme.id}')">➕ SIP ઉમેરો</button>` : ''}
           ${scheme.sipConfig ? `<button onclick="toggleSipStatus('${scheme.id}')">${scheme.sipConfig.status==='stopped' ? '▶️ SIP ફરી ચાલુ કરો' : '⏸ SIP બંધ કરો'}</button>` : ''}
