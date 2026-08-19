@@ -1606,6 +1606,56 @@ async function matchUnitsToActual(schemeId){
   await showAlertM('થઈ ગયું — કુલ Units હવે ' + target.toFixed(3) + ' છે (ફેરફાર ' + (latestIdx+1) + 'મી એન્ટ્રીમાં કરવામાં આવ્યો).');
 }
 
+// ફંડનો scheme code ખોટો જોડાયેલો હોય (દા.ત. Direct Plan ને બદલે Regular
+// Plan) ત્યારે વાપરવા માટે — બધી જૂની entries (dates, amounts) એમ જ રહે
+// છે, ફક્ત schemeCode બદલાય છે અને દરેક entry નો NAV/units નવા scheme ના
+// સાચા ઇતિહાસ પરથી ફરીથી ગણાય છે.
+async function changeSchemeCode(schemeId){
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===schemeId);
+  if(!s){ await showAlertM('ફંડ મળ્યું નહીં.'); return; }
+
+  const newCodeStr = await showPromptM(
+    'સાચો AMFI/mfapi Scheme Code નાખો (અત્યારે: ' + s.schemeCode + ' — ' + s.schemeName + ')',
+    s.schemeCode
+  );
+  if(newCodeStr===null) return;
+  const newCode = newCodeStr.trim();
+  if(!newCode){ await showAlertM('યોગ્ય Code નાખો.'); return; }
+
+  try{
+    showProcessOverlay('Processing... નવા Code નો NAV ઇતિહાસ લાવી રહ્યા છીએ');
+    const { meta, historyAsc } = await getSchemeHistory(newCode);
+    if(!historyAsc || !historyAsc.length){
+      finishProcessOverlay(false, 'આ Code માટે NAV ડેટા મળ્યો નહીં. Code ચેક કરો.');
+      return;
+    }
+
+    // દરેક જૂની transaction ની તારીખ એ જ રાખો, પણ નવા scheme ના NAV/units
+    // પ્રમાણે ફરીથી ગણો (amount એ જ રહે છે).
+    s.transactions.forEach(t=>{
+      const d = parseLocalDate(t.date);
+      const navEntry = findNavOnOrBefore(historyAsc, d) || historyAsc[0];
+      t.nav = navEntry.nav;
+      t.units = t.amount / navEntry.nav;
+    });
+
+    s.schemeCode = newCode;
+    s.schemeName = (meta && meta.scheme_name) || s.schemeName;
+    s.amc = (meta && meta.fund_house) || s.amc;
+    const latest = historyAsc[historyAsc.length-1];
+    s.lastNav = latest.nav;
+    s.lastNavDate = toISODate(latest.date);
+    s.lastCheckedAt = new Date().toISOString();
+
+    await saveSchemes(schemes);
+    finishProcessOverlay(true, 'Scheme Code બદલાઈ ગયો — બધી entries નવેસરથી ગણાઈ ગઈ.');
+    await renderDashboardKeepScroll();
+  }catch(e){
+    finishProcessOverlay(false, 'Error: ' + (e && e.message ? e.message : 'કંઈક ખોટું થયું.'));
+  }
+}
+
 function computeSchemeMetrics(scheme){
   const totalUnits = scheme.transactions.reduce((s,t)=>s+t.units,0);
   const invested = scheme.transactions.reduce((s,t)=>s+t.amount,0);
@@ -1739,6 +1789,7 @@ async function renderDashboard(){
         <div class="fund-actions">
           <button onclick="showFundGraph('${scheme.id}')">📊 ગ્રાફ જુઓ</button>
           <button onclick="matchUnitsToActual('${scheme.id}')">🎯 Units મેચ કરો (CAMS)</button>
+          <button onclick="changeSchemeCode('${scheme.id}')">🔧 Scheme Code બદલો</button>
           <button onclick="addTopup('${scheme.id}')">➕ Lumpsum ઉમેરો</button>
           ${!scheme.sipConfig ? `<button onclick="addSipToFund('${scheme.id}')">➕ SIP ઉમેરો</button>` : ''}
           ${scheme.sipConfig ? `<button onclick="toggleSipStatus('${scheme.id}')">${scheme.sipConfig.status==='stopped' ? '▶️ SIP ફરી ચાલુ કરો' : '⏸ SIP બંધ કરો'}</button>` : ''}
