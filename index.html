@@ -1113,11 +1113,12 @@ const KNOWN_AMC_NAMES = [
   'Taurus','Samco','360 ONE','IDFC','ITI','LIC','SBI','NJ'
 ];
 function getAmcName(scheme){
-  // નવા ફંડ ઉમેરો ત્યારે AMFI ના meta.fund_house પરથી amc સચવાય છે.
-  if(scheme.amc) return scheme.amc;
-  // જૂના ફંડ માટે એ ફિલ્ડ ના હોય તો scheme name ના શરૂઆતના શબ્દો પરથી
-  // જાણીતા AMC નામોની યાદી સાથે સરખાવીને AMC તારવવામાં આવે છે.
-  const name = scheme.schemeName;
+  // નવા ફંડ ઉમેરો ત્યારે AMFI ના meta.fund_house પરથી amc સચવાય છે (દા.ત.
+  // "HDFC Mutual Fund"), જૂના ફંડ માટે એ ફિલ્ડ નથી હોતું. બંને કિસ્સામાં
+  // KNOWN_AMC_NAMES સાથે સરખાવીને એક જ ટૂંકું, સુસંગત નામ કાઢવામાં આવે છે,
+  // જેથી "HDFC" અને "HDFC Mutual Fund" જેવા એક જ AMC ના જુદા જુદા લખાણ
+  // અલગ ગ્રુપ ન બની જાય.
+  const name = scheme.amc || scheme.schemeName;
   const match = KNOWN_AMC_NAMES
     .filter(amc => new RegExp('^' + amc.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'i').test(name))
     .sort((a,b)=> b.length - a.length)[0];
