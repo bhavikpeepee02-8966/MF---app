@@ -620,9 +620,10 @@ async function loadSchemes(){
     return raw ? JSON.parse(raw) : [];
   }catch(e){ return []; }
 }
-async function saveSchemes(schemes){
+async function saveSchemes(schemes, isAutoRefresh){
   try{
     localStorage.setItem(STORAGE_KEY, JSON.stringify(schemes));
+    if(!isAutoRefresh) silentAutoBackup(); // ફક્ત તમે ડેટા બદલો (add/edit/delete) ત્યારે — NAV ના background auto-refresh પર નહીં
     return true;
   }catch(e){ console.error('storage save failed', e); return false; }
 }
@@ -2213,7 +2214,7 @@ async function refreshAllFunds(){
       resolvePendingTransfersIn(s, historyAsc);
     }catch(e){ console.error('refresh failed for', s.schemeName, e); }
   }
-  await saveSchemes(schemes);
+  await saveSchemes(schemes, true); // auto NAV refresh — backup ટ્રિગર નહીં કરવાનું
   await renderDashboardKeepScroll();
 }
 
@@ -2368,6 +2369,41 @@ document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState === 'visible') silentAutoRefresh();
 });
 autoRefreshTimer = setInterval(silentAutoRefresh, 10*60*1000);
+
+// તમે કોઈ entry ઉમેરો/edit કરો/delete કરો (saveSchemes ચાલે) ત્યારે જ —
+// notification/popup વગર, ચૂપચાપ — આખા ડેટાનું JSON backup Downloads
+// ફોલ્ડરમાં auto-download થાય છે. ફાઇલનું નામ date+time સાથે હોવાથી
+// દરેક ફાઇલ અલગ રહે છે (overwrite નથી થતું). એટલે દિવસમાં જેટલી વાર ડેટા
+// બદલો એટલી જ backup ફાઇલો બનશે — 0, 1, 2, 3, ગમે તેટલી.
+let lastBackupSig = null; // એક જ save-action માં બે વાર backup ના થાય એ માટે
+function silentAutoBackup(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return;
+    const schemes = JSON.parse(raw);
+    if(!Array.isArray(schemes) || !schemes.length) return;
+
+    // 1.5 સેકન્ડમાં એ જ ડેટા માટે ફરી call આવે (દા.ત. એક જ action માં
+    // saveSchemes બે વાર ચાલે) તો ડુપ્લિકેટ ફાઇલ ના બને.
+    const sig = raw.length + ':' + Date.now();
+    if(lastBackupSig && (Date.now() - parseInt(lastBackupSig.split(':')[1],10)) < 1500) return;
+    lastBackupSig = sig;
+
+    const payload = { app: 'mf-chopadi-backup', savedAt: new Date().toISOString(), schemes };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const now = new Date();
+    const pad = n=>String(n).padStart(2,'0');
+    const stamp = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+'_'+pad(now.getHours())+'-'+pad(now.getMinutes())+'-'+pad(now.getSeconds());
+    a.href = url;
+    a.download = 'mf-backup-' + stamp + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  }catch(e){ /* backup ચૂપચાપ નિષ્ફળ જાય તો પણ app ના flow ને અસર ના થાય */ }
+}
 
 </script>
 </body>
