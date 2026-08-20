@@ -2199,6 +2199,7 @@ async function refreshOneFund(id){
 
 async function refreshAllFunds(){
   const schemes = await loadSchemes();
+  const errors = [];
   for(const s of schemes){
     try{
       const { historyAsc } = await getSchemeHistory(s.schemeCode);
@@ -2212,10 +2213,19 @@ async function refreshAllFunds(){
         s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
       }
       resolvePendingTransfersIn(s, historyAsc);
-    }catch(e){ console.error('refresh failed for', s.schemeName, e); }
+    }catch(e){ console.error('refresh failed for', s.schemeName, e); errors.push(s.schemeName + ': ' + e.message); }
   }
   await saveSchemes(schemes, true); // auto NAV refresh — backup ટ્રિગર નહીં કરવાનું
   await renderDashboardKeepScroll();
+  // NAV fetch ચૂપચાપ fail થાય તો પણ ખબર પડે એ માટે — screen પર error બતાવવો
+  const statusEl = document.getElementById('dash-status');
+  if(statusEl){
+    if(errors.length === schemes.length && schemes.length>0){
+      statusEl.innerHTML = '<div class="status-msg err" style="margin-bottom:12px;">⚠️ NAV તાજું ના થયું — ' + errors[0] + '</div>';
+    } else if(errors.length>0){
+      statusEl.innerHTML = '<div class="status-msg err" style="margin-bottom:12px;">⚠️ ' + errors.length + ' ફંડ ની NAV તાજી ના થઈ</div>';
+    }
+  }
 }
 
 // ટ્રાન્સફર (STP) ની destination બાજુ — જ્યારે NAV હજુ AMFI પર આવી ના હોય
