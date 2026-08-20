@@ -1113,12 +1113,11 @@ const KNOWN_AMC_NAMES = [
   'Taurus','Samco','360 ONE','IDFC','ITI','LIC','SBI','NJ'
 ];
 function getAmcName(scheme){
-  // નવા ફંડ ઉમેરો ત્યારે AMFI ના meta.fund_house પરથી amc સચવાય છે (દા.ત.
-  // "HDFC Mutual Fund"), જૂના ફંડ માટે એ ફિલ્ડ નથી હોતું. બંને કિસ્સામાં
-  // KNOWN_AMC_NAMES સાથે સરખાવીને એક જ ટૂંકું, સુસંગત નામ કાઢવામાં આવે છે,
-  // જેથી "HDFC" અને "HDFC Mutual Fund" જેવા એક જ AMC ના જુદા જુદા લખાણ
-  // અલગ ગ્રુપ ન બની જાય.
-  const name = scheme.amc || scheme.schemeName;
+  // નવા ફંડ ઉમેરો ત્યારે AMFI ના meta.fund_house પરથી amc સચવાય છે.
+  if(scheme.amc) return scheme.amc;
+  // જૂના ફંડ માટે એ ફિલ્ડ ના હોય તો scheme name ના શરૂઆતના શબ્દો પરથી
+  // જાણીતા AMC નામોની યાદી સાથે સરખાવીને AMC તારવવામાં આવે છે.
+  const name = scheme.schemeName;
   const match = KNOWN_AMC_NAMES
     .filter(amc => new RegExp('^' + amc.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'i').test(name))
     .sort((a,b)=> b.length - a.length)[0];
@@ -1775,6 +1774,7 @@ async function renderDashboard(){
           <div><div class="lbl">રોકાણના દિવસો</div><div class="val">${holdingDays!==null ? holdingDays : '—'}</div></div>
         </div>
         <div class="nav-line">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b></div>
+        <div class="sparkline-wrap" id="sparkline-${scheme.id}"></div>
         <div class="taxfree-line">ટેક્સ-ફ્રી ઉપાડ યોગ્ય રકમ (1 વર્ષ+): <b>${fmtINR(taxFreeAmount)}</b></div>
         ${sipBreakdownHtml}
         <div class="daychange-line" id="daychange-${scheme.id}"><span style="color:var(--ink-soft); font-size:11.5px;">આજનો ફેરફાર ગણાય છે...</span></div>
@@ -1824,6 +1824,50 @@ async function renderDashboard(){
   fetchAllHistoriesAndRender(schemes);
 }
 
+// છેલ્લા ~90 દિવસનો નાનો ટ્રેન્ડ (sparkline) — Google Finance ના trend
+// column જેવો — SVG તરીકે દોરે છે. renderDayChanges/renderFundHealthAll
+// માટે પહેલેથી ફેચ થયેલી NAV history જ ફરીથી વાપરે છે, અલગથી કોઈ નવો
+// API call નથી કરવો પડતો.
+function renderSparklines(schemes, histories){
+  schemes.forEach(s=>{
+    const el = document.getElementById('sparkline-'+s.id);
+    if(!el) return;
+    const hist = histories[s.id];
+    if(!hist || hist.length<2){ el.innerHTML=''; return; }
+    const cutoff = new Date(hist[hist.length-1].date);
+    cutoff.setDate(cutoff.getDate()-90);
+    let recent = hist.filter(h=>h.date>=cutoff);
+    if(recent.length<2) recent = hist.slice(-30);
+    if(recent.length<2){ el.innerHTML=''; return; }
+
+    const w=140, h=36, pad=2;
+    const navs = recent.map(r=>r.nav);
+    const min = Math.min(...navs), max = Math.max(...navs);
+    const range = (max-min) || 1;
+    const stepX = (w-pad*2) / (recent.length-1);
+    const pts = recent.map((r,i)=>{
+      const x = pad + i*stepX;
+      const y = pad + (h-pad*2) * (1 - (r.nav-min)/range);
+      return x.toFixed(1)+','+y.toFixed(1);
+    });
+    const up = navs[navs.length-1] >= navs[0];
+    const color = up ? '#1a9e5c' : '#d94141';
+    const lastPt = pts[pts.length-1].split(',');
+    const polyline = pts.join(' ');
+    const areaPts = polyline + ' ' + (w-pad)+','+(h-pad) + ' ' + pad+','+(h-pad);
+
+    el.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px; margin:4px 0 8px;">
+        <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="flex-shrink:0;">
+          <polygon points="${areaPts}" fill="${color}" opacity="0.12"></polygon>
+          <polyline points="${polyline}" fill="none" stroke="${color}" stroke-width="1.6"></polyline>
+          <circle cx="${lastPt[0]}" cy="${lastPt[1]}" r="2.2" fill="${color}"></circle>
+        </svg>
+        <span style="font-size:10.5px; color:var(--ink-soft);">છેલ્લા ${recent.length>60?'90':'30'} દિવસનો ટ્રેન્ડ</span>
+      </div>`;
+  });
+}
+
 async function fetchAllHistoriesAndRender(schemes){
   const histories = {};
   for(const s of schemes){
@@ -1834,6 +1878,7 @@ async function fetchAllHistoriesAndRender(schemes){
   }
   renderFundHealthAll(schemes, histories).catch(e=>console.error('fund health failed', e));
   renderDayChanges(schemes, histories);
+  renderSparklines(schemes, histories);
 }
 
 function computeDayChange(historyAsc, totalUnits){
