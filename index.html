@@ -1225,7 +1225,7 @@ async function searchSchemes(query){
   return searchLocalSchemes(query);
 }
 async function getSchemeHistory(code){
-  const res = await fetch('https://api.mfapi.in/mf/' + code);
+  const res = await fetch('https://api.mfapi.in/mf/' + code, { cache: 'no-store' });
   if(!res.ok) throw new Error('history fetch failed');
   const data = await res.json();
   // data.data is descending by date; build ascending array with Date objects + numeric nav
