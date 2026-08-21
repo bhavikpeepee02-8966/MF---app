@@ -1224,12 +1224,54 @@ async function searchSchemes(query){
   await ensureSchemeList();
   return searchLocalSchemes(query);
 }
+let _amfiNavMap = null; // cache: { schemeCode: {nav, date} } parsed from AMFI NAVAll.txt for this session
+async function getAmfiLatestNavMap(){
+  if(_amfiNavMap) return _amfiNavMap;
+  const res = await fetch('https://www.amfiindia.com/spages/NAVAll.txt', { cache: 'no-store' });
+  if(!res.ok) throw new Error('amfi fetch failed');
+  const text = await res.text();
+  const map = {};
+  let currentDate = null;
+  for(const line of text.split('\n')){
+    const t = line.trim();
+    if(!t) continue;
+    const parts = t.split(';');
+    if(parts.length >= 6 && /^\d+$/.test(parts[0].trim())){
+      const code = parts[0].trim();
+      const nav = parseFloat(parts[4]);
+      const dateStr = parts[5].trim(); // e.g. 20-Aug-2026
+      if(!isNaN(nav) && dateStr){ map[code] = { nav, dateStr }; }
+    }
+  }
+  _amfiNavMap = map;
+  return map;
+}
+function parseAmfiDate(dateStr){
+  // "20-Aug-2026" -> Date
+  const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  const [d,mon,y] = dateStr.split('-');
+  return new Date(parseInt(y), months[mon], parseInt(d));
+}
 async function getSchemeHistory(code){
   const res = await fetch('https://api.mfapi.in/mf/' + code, { cache: 'no-store' });
   if(!res.ok) throw new Error('history fetch failed');
   const data = await res.json();
   // data.data is descending by date; build ascending array with Date objects + numeric nav
   const asc = data.data.map(x=>({date: parseMfDate(x.date), nav: parseFloat(x.nav)})).reverse();
+  // AMFI પરથી સીધું latest NAV try કરો — mfapi.in ના sync delay ને ટાળવા. Fail થાય તો mfapi.in ડેટા જ વપરાય.
+  try{
+    const amfiMap = await getAmfiLatestNavMap();
+    const entry = amfiMap[String(code)];
+    if(entry){
+      const amfiDate = parseAmfiDate(entry.dateStr);
+      const lastInAsc = asc[asc.length-1];
+      if(!lastInAsc || amfiDate > lastInAsc.date){
+        asc.push({ date: amfiDate, nav: entry.nav });
+      } else if(amfiDate.getTime() === lastInAsc.date.getTime()){
+        lastInAsc.nav = entry.nav; // same date, AMFI ના latest figure થી update
+      }
+    }
+  }catch(e){ console.warn('AMFI direct fetch skipped, using mfapi.in only:', e.message); }
   return { meta: data.meta, historyAsc: asc };
 }
 function findNavOnOrBefore(historyAsc, targetDate){
