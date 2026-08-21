@@ -1225,18 +1225,6 @@ async function searchSchemes(query){
   return searchLocalSchemes(query);
 }
 async function getSchemeHistory(code){
-  // tigzig.com ને primary source તરીકે વાપરો — mfapi.in કરતાં વધુ taza (updated) NAV આપે છે
-  try{
-    const res = await fetch('https://api.tigzig.com/mf/v1/schemes/' + code + '/nav', { cache: 'no-store' });
-    if(!res.ok) throw new Error('tigzig fetch failed: ' + res.status);
-    const data = await res.json();
-    if(!data.data || !data.data.length) throw new Error('tigzig: empty data');
-    // tigzig ડેટા already ascending (જૂનીથી નવી તારીખ) છે, date format "YYYY-MM-DD"
-    const asc = data.data.map(x=>({date: parseLocalDate(x.date), nav: parseFloat(x.nav)}));
-    return { meta: { scheme_name: data.scheme_name, isin_growth: data.isin }, historyAsc: asc };
-  }catch(e){
-    console.warn('tigzig fetch failed, falling back to mfapi.in:', e.message);
-  }
   const res = await fetch('https://api.mfapi.in/mf/' + code, { cache: 'no-store' });
   if(!res.ok) throw new Error('history fetch failed');
   const data = await res.json();
@@ -2211,7 +2199,6 @@ async function refreshOneFund(id){
 
 async function refreshAllFunds(){
   const schemes = await loadSchemes();
-  const errors = [];
   for(const s of schemes){
     try{
       const { historyAsc } = await getSchemeHistory(s.schemeCode);
@@ -2225,19 +2212,10 @@ async function refreshAllFunds(){
         s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
       }
       resolvePendingTransfersIn(s, historyAsc);
-    }catch(e){ console.error('refresh failed for', s.schemeName, e); errors.push(s.schemeName + ': ' + e.message); }
+    }catch(e){ console.error('refresh failed for', s.schemeName, e); }
   }
   await saveSchemes(schemes, true); // auto NAV refresh — backup ટ્રિગર નહીં કરવાનું
   await renderDashboardKeepScroll();
-  // NAV fetch ચૂપચાપ fail થાય તો પણ ખબર પડે એ માટે — screen પર error બતાવવો
-  const statusEl = document.getElementById('dash-status');
-  if(statusEl){
-    if(errors.length === schemes.length && schemes.length>0){
-      statusEl.innerHTML = '<div class="status-msg err" style="margin-bottom:12px;">⚠️ NAV તાજું ના થયું — ' + errors[0] + '</div>';
-    } else if(errors.length>0){
-      statusEl.innerHTML = '<div class="status-msg err" style="margin-bottom:12px;">⚠️ ' + errors.length + ' ફંડ ની NAV તાજી ના થઈ</div>';
-    }
-  }
 }
 
 // ટ્રાન્સફર (STP) ની destination બાજુ — જ્યારે NAV હજુ AMFI પર આવી ના હોય
