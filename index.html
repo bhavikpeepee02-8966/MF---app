@@ -1224,12 +1224,62 @@ async function searchSchemes(query){
   await ensureSchemeList();
   return searchLocalSchemes(query);
 }
+// AMFI ની સત્તાવાર NAVAll.txt ફાઇલ (બધા ફંડ્સનું latest NAV, રોજનું,
+// mfapi.in કરતાં વહેલું update થાય છે) — CORS ના કારણે browser સીધો access
+// નથી કરી શકતું, એટલે public proxy વાપરીને લાવવું પડે છે. આખી ફાઇલ ~5000+
+// ફંડ્સની હોવાથી session દીઠ 1 વાર (10 મિનિટ cache) જ fetch કરાય છે,
+// દરેક ફંડ માટે અલગ call નથી કરવો પડતો.
+let amfiNavMapCache = null;
+async function getAmfiNavMap(){
+  if(amfiNavMapCache && (Date.now() - amfiNavMapCache.fetchedAt < 10*60*1000)){
+    return amfiNavMapCache.map;
+  }
+  try{
+    const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://www.amfiindia.com/spDownload/NAVAll.txt');
+    const res = await fetch(proxyUrl, {cache:'no-store'});
+    if(!res.ok) throw new Error('amfi fetch failed');
+    const text = await res.text();
+    const map = {};
+    const monthMap = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+    text.split('\n').forEach(line=>{
+      const parts = line.split(';');
+      if(parts.length < 6) return;
+      const code = parts[0].trim();
+      if(!code || isNaN(Number(code))) return;
+      const nav = parseFloat(parts[4]);
+      if(isNaN(nav)) return;
+      const dm = parts[5].trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+      if(!dm || monthMap[dm[2]]===undefined) return;
+      map[code] = { nav, date: new Date(parseInt(dm[3],10), monthMap[dm[2]], parseInt(dm[1],10)) };
+    });
+    amfiNavMapCache = { map, fetchedAt: Date.now() };
+    return map;
+  }catch(e){
+    return null; // proxy/AMFI નિષ્ફળ જાય તો ચૂપચાપ null — mfapi.in ડેટા જ વપરાશે
+  }
+}
+
 async function getSchemeHistory(code){
-  const res = await fetch('https://api.mfapi.in/mf/' + code, { cache: 'no-store' });
+  const res = await fetch('https://api.mfapi.in/mf/' + code, {cache:'no-store'});
   if(!res.ok) throw new Error('history fetch failed');
   const data = await res.json();
   // data.data is descending by date; build ascending array with Date objects + numeric nav
   const asc = data.data.map(x=>({date: parseMfDate(x.date), nav: parseFloat(x.nav)})).reverse();
+
+  // AMFI માંથી વધુ તાજું NAV મળે તો ઉમેરો/બદલો (mfapi.in ના lag કરતાં આગળ)
+  try{
+    const amfiMap = await getAmfiNavMap();
+    const amfiEntry = amfiMap && amfiMap[String(code)];
+    if(amfiEntry){
+      const last = asc[asc.length-1];
+      if(!last || amfiEntry.date.getTime() > last.date.getTime()){
+        asc.push({ date: amfiEntry.date, nav: amfiEntry.nav });
+      }else if(amfiEntry.date.getTime() === last.date.getTime()){
+        last.nav = amfiEntry.nav;
+      }
+    }
+  }catch(e){ /* silent fallback */ }
+
   return { meta: data.meta, historyAsc: asc };
 }
 function findNavOnOrBefore(historyAsc, targetDate){
