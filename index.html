@@ -1114,15 +1114,17 @@ const KNOWN_AMC_NAMES = [
   'Taurus','Samco','360 ONE','IDFC','ITI','LIC','SBI','NJ'
 ];
 function getAmcName(scheme){
-  // નવા ફંડ ઉમેરો ત્યારે AMFI ના meta.fund_house પરથી amc સચવાય છે.
-  if(scheme.amc) return scheme.amc;
-  // જૂના ફંડ માટે એ ફિલ્ડ ના હોય તો scheme name ના શરૂઆતના શબ્દો પરથી
-  // જાણીતા AMC નામોની યાદી સાથે સરખાવીને AMC તારવવામાં આવે છે.
-  const name = scheme.schemeName;
-  const match = KNOWN_AMC_NAMES
-    .filter(amc => new RegExp('^' + amc.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'i').test(name))
+  // scheme.amc ગમે તે રીતે save થયું હોય ("HDFC Mutual Fund" કે ફક્ત
+  // "HDFC") — groupings માટે હંમેશા KNOWN_AMC_NAMES ની ટૂંકી, canonical
+  // નામ સાથે સરખાવીને એક જ સ્વરૂપ પરત કરીએ છીએ, જેથી એક જ AMC ના ફંડ્સ
+  // "HDFC Mutual Fund" vs "HDFC" જેવા બે અલગ group માં ના વહેંચાય.
+  const raw = scheme.amc || scheme.schemeName;
+  const known = KNOWN_AMC_NAMES
+    .filter(amc => new RegExp('^' + amc.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'i').test(raw))
     .sort((a,b)=> b.length - a.length)[0];
-  if(match) return match;
+  if(known) return known;
+  if(scheme.amc) return scheme.amc;
+  const name = scheme.schemeName;
   return (name.split(/\bFund\b/i)[0] || name).trim().split(/\s+/)[0];
 }
 function applyLatestNav(s, latest){
@@ -1259,7 +1261,42 @@ async function getAmfiNavMap(){
   }
 }
 
+// એક વાર આજની તારીખનું NAV મળી જાય પછી, એ જ દિવસમાં ફરી-ફરી mfapi.in/AMFI
+// ને પૂછવાની જરૂર નથી (NAV દિવસમાં ફક્ત 1 વાર જ declare થાય છે) — એટલે
+// localStorage માં "આજની તારીખ" ના key સાથે cache કરી રાખીએ છીએ. બીજા
+// દિવસે (તારીખ બદલાય) આપોઆપ ફરી fetch થશે.
+const HIST_CACHE_KEY = 'mf_hist_cache_v1';
+function todayStamp(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function readHistCache(code){
+  try{
+    const all = JSON.parse(localStorage.getItem(HIST_CACHE_KEY) || '{}');
+    const entry = all[code];
+    if(!entry || entry.day !== todayStamp()) return null;
+    return {
+      meta: entry.meta,
+      historyAsc: entry.historyAsc.map(h=>({date: new Date(h.date), nav: h.nav}))
+    };
+  }catch(e){ return null; }
+}
+function writeHistCache(code, result){
+  try{
+    const all = JSON.parse(localStorage.getItem(HIST_CACHE_KEY) || '{}');
+    all[code] = {
+      day: todayStamp(),
+      meta: result.meta,
+      historyAsc: result.historyAsc.map(h=>({date: h.date.getTime(), nav: h.nav}))
+    };
+    localStorage.setItem(HIST_CACHE_KEY, JSON.stringify(all));
+  }catch(e){ /* cache save નિષ્ફળ જાય તો પણ app ચાલુ રહે */ }
+}
+
 async function getSchemeHistory(code){
+  const cached = readHistCache(String(code));
+  if(cached) return cached;
+
   const res = await fetch('https://api.mfapi.in/mf/' + code, {cache:'no-store'});
   if(!res.ok) throw new Error('history fetch failed');
   const data = await res.json();
@@ -1280,7 +1317,9 @@ async function getSchemeHistory(code){
     }
   }catch(e){ /* silent fallback */ }
 
-  return { meta: data.meta, historyAsc: asc };
+  const result = { meta: data.meta, historyAsc: asc };
+  writeHistCache(String(code), result);
+  return result;
 }
 function findNavOnOrBefore(historyAsc, targetDate){
   let lo=0, hi=historyAsc.length-1, ans=null;
