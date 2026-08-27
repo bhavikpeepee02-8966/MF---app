@@ -599,6 +599,19 @@
     </div>
   </div>
 
+  <!-- ============ WHAT-IF (બીજા ફંડમાં હોત તો?) MODAL ============ -->
+  <div id="whatif-overlay" style="display:none; position:fixed; inset:0; background:rgba(20,30,25,0.55); z-index:1000; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:16px; max-width:480px; width:100%; box-shadow:0 12px 30px rgba(0,0,0,0.2); max-height:88vh; overflow-y:auto;">
+      <div style="font-family:'Noto Sans Gujarati',sans-serif; font-weight:700; font-size:15px; color:var(--ink); margin-bottom:10px;">બીજા ફંડમાં હોત તો?</div>
+      <div class="field gu" style="margin-bottom:0;">
+        <input type="text" id="whatif-search-input" placeholder="ભારતના કોઈપણ ફંડનું નામ લખો (દા.ત. Parag Parikh Flexi Cap)">
+      </div>
+      <div class="search-results" id="whatif-search-results" style="display:none;"></div>
+      <div id="whatif-body"></div>
+      <button onclick="document.getElementById('whatif-overlay').style.display='none';" style="margin-top:14px; width:100%; padding:11px; border-radius:9px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font-weight:600; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">બંધ કરો</button>
+    </div>
+  </div>
+
   <!-- ============ COMPARE SELECTION BAR ============ -->
   <div id="compare-bar" class="compare-bar">
     <span class="cb-text" id="compare-bar-text">0 ફંડ પસંદ કર્યા</span>
@@ -952,6 +965,114 @@ async function openCompareModal(){
   document.getElementById('compare-overlay').style.display = 'flex';
 }
 
+/* =========================================================
+   WHAT-IF — "આ જ તારીખે/રકમે બીજા ફંડમાં રોકાણ કર્યું હોત તો?"
+   Fund A ના actual transactions (તારીખ + રકમ) એ જ, ફક્ત Fund B ની NAV
+   વાપરીને hypothetical units/current value ગણવા — real transaction કંઈ
+   બદલાતું નથી, ફક્ત સરખામણી માટે.
+   ========================================================= */
+async function whatIfCompare(sourceId){
+  const overlay = document.getElementById('whatif-overlay');
+  const searchInput = document.getElementById('whatif-search-input');
+  const resultsBox = document.getElementById('whatif-search-results');
+  document.getElementById('whatif-body').innerHTML = '';
+  searchInput.value = '';
+  resultsBox.style.display = 'none';
+  resultsBox.innerHTML = '';
+  overlay.style.display = 'flex';
+
+  let searchTimer2;
+  searchInput.oninput = (e)=>{
+    clearTimeout(searchTimer2);
+    const q = e.target.value.trim();
+    if(q.length < 3){ resultsBox.style.display='none'; resultsBox.innerHTML=''; return; }
+    searchTimer2 = setTimeout(async ()=>{
+      resultsBox.innerHTML = '<div class="item">શોધી રહ્યા છીએ...</div>';
+      resultsBox.style.display = 'block';
+      try{
+        const results = await searchSchemes(q);
+        if(!results.length){
+          resultsBox.innerHTML = '<div class="item">કંઈ મળ્યું નહીં. બીજું નામ અજમાવો.</div>';
+          return;
+        }
+        resultsBox.innerHTML = results.slice(0,25).map(r=>
+          `<div class="item" data-code="${r.schemeCode}" data-name="${r.schemeName.replace(/"/g,'&quot;')}">
+            ${r.schemeName}<div class="code">Code: ${r.schemeCode}</div>
+          </div>`
+        ).join('');
+        resultsBox.querySelectorAll('.item[data-code]').forEach(el=>{
+          el.addEventListener('click', ()=>{
+            resultsBox.style.display = 'none';
+            searchInput.value = el.dataset.name;
+            runWhatIfCompare(sourceId, el.dataset.code, el.dataset.name);
+          });
+        });
+      }catch(err){
+        resultsBox.innerHTML = '<div class="item">શોધમાં તકલીફ પડી. ઇન્ટરનેટ કનેક્શન ચેક કરો.</div>';
+      }
+    }, 120);
+  };
+}
+
+async function runWhatIfCompare(sourceId, destSchemeCode, destSchemeName){
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===sourceId);
+  if(!s) return;
+
+  showProcessOverlay('Processing... NAV લાવી રહ્યા છીએ');
+  try{
+    const { historyAsc: destHist } = await getSchemeHistory(destSchemeCode);
+    const actual = computeSchemeMetrics(s);
+
+    let hypoUnits = 0;
+    (s.transactions||[]).forEach(t=>{
+      const d = parseLocalDate(t.date);
+      const navEntry = findNavOnOrBefore(destHist, d) || destHist[0];
+      hypoUnits += t.amount / navEntry.nav;
+    });
+    const destLatest = destHist[destHist.length-1];
+    const hypoCurrentValue = hypoUnits * destLatest.nav;
+    const hypoGain = hypoCurrentValue - actual.invested;
+    const hypoGainPct = actual.invested>0 ? (hypoGain/actual.invested*100) : 0;
+
+    const diff = hypoCurrentValue - actual.currentValue;
+    const diffIsBetter = diff >= 0;
+
+    const gcA = actual.gain>=0 ? 'gain':'loss';
+    const gcH = hypoGain>=0 ? 'gain':'loss';
+
+    const body = `
+      <div style="font-size:12.5px; color:var(--ink-soft); margin:10px 0;">
+        <b style="color:var(--ink);">${escapeHtml(s.schemeName)}</b> માં જે તારીખે/જેટલી રકમે રોકાણ કર્યું, એ જ તારીખે/રકમે
+        <b style="color:var(--ink);">${escapeHtml(destSchemeName)}</b> માં કર્યું હોત તો શું થાત — hypothetical ગણતરી (real ડેટામાં કંઈ બદલાતું નથી).
+      </div>
+      <div class="compare-detail-top">
+        <div><div class="ns-lbl">રોકાણ (બંનેમાં સરખું)</div><div class="ns-val">${fmtINR(actual.invested)}</div></div>
+      </div>
+      <div class="compare-fund-row">
+        <span class="cfr-name">✅ ${escapeHtml(s.schemeName)} (actual)</span>
+        <span class="cfr-val">${fmtINR(actual.currentValue)}</span>
+        <span class="cfr-val ${gcA}">${fmtINR(actual.gain)} (${actual.gainPct.toFixed(1)}%)</span>
+      </div>
+      <div class="compare-fund-row">
+        <span class="cfr-name">🔄 ${escapeHtml(destSchemeName)} (hypothetical)</span>
+        <span class="cfr-val">${fmtINR(hypoCurrentValue)}</span>
+        <span class="cfr-val ${gcH}">${fmtINR(hypoGain)} (${hypoGainPct.toFixed(1)}%)</span>
+      </div>
+      <div style="margin-top:12px; padding:10px 12px; border-radius:9px; background:${diffIsBetter?'rgba(76,175,80,0.1)':'rgba(211,47,47,0.08)'};">
+        <b style="color:${diffIsBetter?'var(--green)':'#D32F2F'};">
+          ${diffIsBetter
+            ? '👉 ' + escapeHtml(destSchemeName) + ' માં હોત તો ' + fmtINR(Math.abs(diff)) + ' વધારે મળત'
+            : '👉 ' + escapeHtml(s.schemeName) + ' માં રોકાણ કરીને ' + fmtINR(Math.abs(diff)) + ' વધારે ફાયદો થયો'}
+        </b>
+      </div>`;
+    document.getElementById('whatif-body').innerHTML = body;
+    document.getElementById('process-overlay').style.display = 'none';
+  }catch(e){
+    finishProcessOverlay(false, 'Not complete. NAV લાવવામાં તકલીફ પડી, ઇન્ટરનેટ ચેક કરો.');
+  }
+}
+
 async function showFundGraph(schemeId){
   const schemes = await loadSchemes();
   const s = schemes.find(x=>x.id===schemeId);
@@ -1041,7 +1162,7 @@ async function showFundGraph(schemeId){
 
     drawSimpleLineChart('fundNavChart', monthlyLabels, monthlyNav);
     legendEl.innerHTML = firstInvestDate
-      ? 'ગ્રાફ તમારા પહેલા રોકાણ (' + fmtDate(firstInvestDate) + ') થી અત્યાર સુધીનો, મહિનાવાર NAV બતાવે છે.'
+      ? 'ગ્રાફ તમારા પહેલા રોકાણ (' + fmtDate(firstInvestDate) + ') થી અત્યાર સુધીનો, મહિનાવાર NAV બતાવે છે. લીલા ટપકાં = મહિનાવાર NAV points.'
       : '';
   }catch(e){
     console.error('fund graph error', e);
@@ -1908,6 +2029,7 @@ async function renderDashboard(){
           ${scheme.sipConfig ? `<button onclick="editSipConfig('${scheme.id}')">✎ SIP તારીખ/રકમ Edit</button>` : ''}
           ${scheme.sipConfig ? `<button class="danger" onclick="removeSipFromFund('${scheme.id}')">🗑 SIP કાઢો</button>` : ''}
           <button onclick="startTransfer('${scheme.id}')">🔁 ટ્રાન્સફર કરો</button>
+          <button onclick="whatIfCompare('${scheme.id}')">🔍 બીજા ફંડમાં હોત તો?</button>
           <button class="danger" onclick="deleteFund('${scheme.id}')">🗑 કાઢી નાખો</button>
         </div>
       </div>`;
