@@ -201,6 +201,11 @@
   }
   .fund-card.stopped{ opacity:.68; }
   .fund-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .drop-alert-badge{
+    display:inline-block; font-size:11px; font-weight:700; color:#B8271A;
+    background:rgba(211,47,47,0.1); border:1px solid rgba(211,47,47,0.25);
+    border-radius:7px; padding:4px 9px; margin-bottom:8px;
+  }
   .fund-head .name{ font-family:'Fraunces',serif; font-weight:600; font-size:15px; line-height:1.3; color:var(--ink); }
   .fund-head .code{ font-size:11px; color:var(--ink-soft); font-family:'IBM Plex Mono',monospace; }
   .badge{
@@ -1987,6 +1992,7 @@ async function renderDashboard(){
 
     cardsHtml += `
       <div class="fund-card ${stoppedClass}">
+        <div id="drop-alert-${scheme.id}"></div>
         <div class="fund-head">
           <div>
             <div class="name">${scheme.schemeName}</div>
@@ -2498,10 +2504,17 @@ function computeFundHealth(historyAsc){
   let peak = historyAsc[0].nav, maxDD=0;
   for(const h of historyAsc){ if(h.nav>peak) peak=h.nav; const dd=(h.nav-peak)/peak; if(dd<maxDD) maxDD=dd; }
 
+  // અત્યારે NAV પોતાની સર્વકાલીન ટોચ (all-time peak) થી કેટલી નીચે છે —
+  // Drawdown (ઉપર) એ ભૂતકાળનો સૌથી ખરાબ ઘટાડો બતાવે છે, આ "લાઇવ/અત્યારનો"
+  // ઘટાડો છે — lumpsum ક્યારે નાખવું એ નક્કી કરવામાં ઉપયોગી.
+  let allTimePeak = historyAsc[0].nav, allTimePeakDate = historyAsc[0].date;
+  for(const h of historyAsc){ if(h.nav > allTimePeak){ allTimePeak = h.nav; allTimePeakDate = h.date; } }
+  const currentDropFromPeakPct = allTimePeak>0 ? ((latest.nav - allTimePeak)/allTimePeak*100) : 0;
+
   const riskFree = 0.07; // assumed India risk-free reference (~G-sec/FD rate)
   const sharpe = isFullYear ? (cagr-riskFree)/volatilityAnnual : null;
 
-  return { cagr: cagr*100, isFullYear, volatility: volatilityAnnual*100, maxDrawdown: maxDD*100, sharpe };
+  return { cagr: cagr*100, isFullYear, volatility: volatilityAnnual*100, maxDrawdown: maxDD*100, sharpe, currentDropFromPeakPct, allTimePeak, allTimePeakDate };
 }
 
 function healthRow(label, valueText, colorClass){
@@ -2519,6 +2532,9 @@ function renderHealthHtml(h){
   const ddColor = h.maxDrawdown >= -15 ? 'pos' : (h.maxDrawdown >= -30 ? 'neu' : 'neg');
   rows += healthRow('મહત્તમ ઘટાડો (Drawdown)', h.maxDrawdown.toFixed(1)+'%', ddColor);
 
+  const dropColor = h.currentDropFromPeakPct >= -5 ? 'pos' : (h.currentDropFromPeakPct >= -10 ? 'neu' : 'neg');
+  rows += healthRow('ટોચ (₹'+h.allTimePeak.toFixed(2)+', '+fmtDate(h.allTimePeakDate)+') થી અત્યારે', h.currentDropFromPeakPct.toFixed(1)+'%', dropColor);
+
   const volColor = h.volatility <= 15 ? 'pos' : (h.volatility <= 25 ? 'neu' : 'neg');
   rows += healthRow('વોલેટિલિટી (ઉતાર-ચઢાવ)', h.volatility.toFixed(1)+'%', volColor);
 
@@ -2533,9 +2549,16 @@ function renderHealthHtml(h){
 async function renderFundHealthAll(schemes, histories){
   for(const s of schemes){
     const el = document.getElementById('health-'+s.id);
-    if(!el) continue;
+    const alertEl = document.getElementById('drop-alert-'+s.id);
     const h = computeFundHealth(histories[s.id]);
-    el.innerHTML = renderHealthHtml(h);
+    if(el) el.innerHTML = renderHealthHtml(h);
+    if(alertEl){
+      // ટોચથી 10% કે વધુ નીચે હોય તો card પર જ ખાસ ⚠️ badge — lumpsum ક્યારે
+      // નાખવું એ નક્કી કરવામાં ઉપયોગી, ફંડ હેલ્થ section ખોલ્યા વગર જ દેખાય
+      alertEl.innerHTML = (h && h.currentDropFromPeakPct <= -10)
+        ? `<div class="drop-alert-badge">⚠️ ટોચ (₹${h.allTimePeak.toFixed(2)}) થી ${Math.abs(h.currentDropFromPeakPct).toFixed(1)}% નીચે</div>`
+        : '';
+    }
   }
 }
 
