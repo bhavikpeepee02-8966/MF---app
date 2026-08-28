@@ -1026,8 +1026,26 @@ async function runWhatIfCompare(sourceId, destSchemeCode, destSchemeName){
 
   showProcessOverlay('Processing... NAV લાવી રહ્યા છીએ');
   try{
+    // "actual" બાજુ પણ hypothetical બાજુ જેમ જ, તાજા (fresh) fetch કરેલા
+    // historyAsc પરથી recompute કરવી — નહીં તો actual (cached s.lastNav/
+    // જૂની stored units) અને hypothetical (fresh fetch) વચ્ચે નાનો ફરક
+    // આવી જાય, ભલે બંને બાજુ એક જ ફંડ (સરખો code) પસંદ કર્યો હોય.
+    const { historyAsc: srcHist } = await getSchemeHistory(s.schemeCode);
     const { historyAsc: destHist } = await getSchemeHistory(destSchemeCode);
-    const actual = computeSchemeMetrics(s);
+
+    const invested = (s.transactions||[]).reduce((sum,t)=>sum+t.amount,0);
+
+    let actualUnits = 0;
+    (s.transactions||[]).forEach(t=>{
+      const d = parseLocalDate(t.date);
+      const navEntry = findNavOnOrBefore(srcHist, d) || srcHist[0];
+      actualUnits += t.amount / navEntry.nav;
+    });
+    const srcLatest = srcHist[srcHist.length-1];
+    const actualCurrentValue = actualUnits * srcLatest.nav;
+    const actualGain = actualCurrentValue - invested;
+    const actualGainPct = invested>0 ? (actualGain/invested*100) : 0;
+    const actual = { invested, currentValue: actualCurrentValue, gain: actualGain, gainPct: actualGainPct };
 
     let hypoUnits = 0;
     (s.transactions||[]).forEach(t=>{
@@ -2555,7 +2573,7 @@ async function renderFundHealthAll(schemes, histories){
     if(alertEl){
       // ટોચથી 10% કે વધુ નીચે હોય તો card પર જ ખાસ ⚠️ badge — lumpsum ક્યારે
       // નાખવું એ નક્કી કરવામાં ઉપયોગી, ફંડ હેલ્થ section ખોલ્યા વગર જ દેખાય
-      alertEl.innerHTML = (h && h.currentDropFromPeakPct <= -10)
+      alertEl.innerHTML = (h && h.currentDropFromPeakPct <= -5)
         ? `<div class="drop-alert-badge">⚠️ ટોચ (₹${h.allTimePeak.toFixed(2)}) થી ${Math.abs(h.currentDropFromPeakPct).toFixed(1)}% નીચે</div>`
         : '';
     }
