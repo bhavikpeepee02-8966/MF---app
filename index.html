@@ -28,6 +28,23 @@
     --red-bg:#FDECEA;
     --line:#E3E8EA;
   }
+  .sync-card{
+    background:var(--paper);border-radius:16px;border:1px solid var(--line);
+    padding:16px;margin-bottom:18px;
+  }
+  .sync-card h3{margin:0 0 8px;font-size:1.05rem;color:var(--maroon-deep);}
+  .sync-card .hint{font-size:.85rem;color:var(--ink-soft);line-height:1.45;margin-bottom:10px;}
+  .sync-card label{font-size:.8rem;color:var(--ink-soft);display:block;margin:8px 0 3px;}
+  .sync-card input{
+    width:100%;font-family:inherit;font-size:.92rem;padding:9px 10px;
+    border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);
+    box-sizing:border-box;
+  }
+  .sync-card .row2{display:flex;gap:8px;margin-top:10px;}
+  .sync-card .row2 button{flex:1;font-size:.92rem;padding:11px;border-radius:10px;border:none;font-weight:700;cursor:pointer;}
+  .sync-card .btn-save{background:var(--maroon-dark);color:#fff;}
+  .sync-card .btn-restore{background:#fff;color:var(--maroon-dark);border:2px solid var(--maroon-dark) !important;}
+  .sync-status{font-size:.85rem;margin-top:10px;min-height:1.2em;}
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   body{
@@ -431,11 +448,22 @@
       <button class="btn-secondary" style="margin-top:0; width:100%;" onclick="showAmcPopup()">🏢 AMC મુજબ નફો/ખોટ જુઓ</button>
     </div>
 
-    <input type="file" id="restore-file-input" accept="application/json,.json" style="display:none;" onchange="restoreBackup(this.files[0])">
-
-    <div style="display:flex; gap:8px; margin-bottom:18px;">
-      <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="downloadBackup()">⬆️ JSON Backup</button>
-      <button class="btn-secondary" style="margin-top:0; font-size:12px;" onclick="document.getElementById('restore-file-input').click()">⬇️ Backup Restore</button>
+    <div class="sync-card">
+      <h3>☁️ GitHub Cloud Sync</h3>
+      <p class="hint">ડેટા તમારા private GitHub repo માં જાય છે. Chrome cache/data clear થાય તો પણ અહીંથી પાછો મેળવી શકાશે. એકવાર ભરીને "Save" કરો — પછી કોઈ પણ ડેટા બદલાય એટલે થોડી સેકન્ડમાં આપોઆપ sync થઈ જશે.</p>
+      <label>GitHub Username</label>
+      <input type="text" id="ghOwner" placeholder="દા.ત. bhavikpeepee02-8966">
+      <label>Repo નામ</label>
+      <input type="text" id="ghRepo" placeholder="દા.ત. Bvkdatabkp">
+      <label>Personal Access Token</label>
+      <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxx">
+      <label>ફાઈલ નામ (repo માં)</label>
+      <input type="text" id="ghPath" placeholder="mf-tracker.json">
+      <div class="row2">
+        <button class="btn-save" id="ghSaveBtn">⬆️ Cloud પર Save કરો</button>
+        <button class="btn-restore" id="ghRestoreBtn">⬇️ Restore કરો</button>
+      </div>
+      <p class="sync-status" id="ghSyncStatus"></p>
     </div>
 
     <div id="fund-list"></div>
@@ -644,7 +672,6 @@ async function loadSchemes(){
 async function saveSchemes(schemes, isAutoRefresh){
   try{
     localStorage.setItem(STORAGE_KEY, JSON.stringify(schemes));
-    if(!isAutoRefresh) silentAutoBackup(); // ફક્ત તમે ડેટા બદલો (add/edit/delete) ત્યારે — NAV ના background auto-refresh પર નહીં
     return true;
   }catch(e){ console.error('storage save failed', e); return false; }
 }
@@ -1788,51 +1815,7 @@ async function renderDashboardKeepScroll(){
    JSON BACKUP / RESTORE (data lives in this device's browser
    only — export lets you save/share it or move to another device)
    ========================================================= */
-async function downloadBackup(){
-  const schemes = await loadSchemes();
-  if(!schemes.length){ await showAlertM('બેકઅપ કરવા માટે હજુ કોઈ ફંડ ડેટા નથી.'); return; }
-  const blob = new Blob([JSON.stringify(schemes, null, 2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  const dateStr = toISODate(new Date());
-  a.href = url;
-  a.download = 'mf-backup-' + dateStr + '.json';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
 
-async function restoreBackup(file){
-  if(!file) return;
-  try{
-    const text = await file.text();
-    const parsed = JSON.parse(text);
-    // Two backup formats exist in this app: the manual "⬇️ Backup" button saves a
-    // plain array, while auto-backup saves a wrapped {app, savedAt, schemes} object.
-    // Accept both so files from either source restore correctly.
-    let schemesArr;
-    if(Array.isArray(parsed)){
-      schemesArr = parsed;
-    } else if(parsed && Array.isArray(parsed.schemes)){
-      schemesArr = parsed.schemes;
-    } else {
-      throw new Error('invalid format');
-    }
-    const existing = await loadSchemes();
-    let ok = true;
-    if(existing.length){
-      ok = await showConfirm('હાલનો ડેટા (' + existing.length + ' ફંડ) ડિલીટ થઈને બેકઅપ ફાઈલ (' + schemesArr.length + ' ફંડ) લોડ થશે. આગળ વધવું છે?');
-    }
-    if(!ok) return;
-    await saveSchemes(schemesArr);
-    document.getElementById('restore-file-input').value = '';
-    await renderDashboardKeepScroll();
-    fetchAllHistoriesAndRender(schemesArr);
-  }catch(e){
-    await showAlertM('આ ફાઈલ વાંચી ના શકાયું. સાચી backup JSON ફાઈલ પસંદ કરો.');
-  }
-}
 
 
 // CAMS/બ્રોકર માંથી સાચા કુલ Units એકવાર નાખો — એપ સૌથી છેલ્લી (તાજેતરની
@@ -2653,41 +2636,125 @@ document.addEventListener('visibilitychange', ()=>{
 });
 autoRefreshTimer = setInterval(silentAutoRefresh, 10*60*1000);
 
-// તમે કોઈ entry ઉમેરો/edit કરો/delete કરો (saveSchemes ચાલે) ત્યારે જ —
-// notification/popup વગર, ચૂપચાપ — આખા ડેટાનું JSON backup Downloads
-// ફોલ્ડરમાં auto-download થાય છે. ફાઇલનું નામ date+time સાથે હોવાથી
-// દરેક ફાઇલ અલગ રહે છે (overwrite નથી થતું). એટલે દિવસમાં જેટલી વાર ડેટા
-// બદલો એટલી જ backup ફાઇલો બનશે — 0, 1, 2, 3, ગમે તેટલી.
-let lastBackupSig = null; // એક જ save-action માં બે વાર backup ના થાય એ માટે
-function silentAutoBackup(){
-  try{
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if(!raw) return;
-    const schemes = JSON.parse(raw);
-    if(!Array.isArray(schemes) || !schemes.length) return;
 
-    // 1.5 સેકન્ડમાં એ જ ડેટા માટે ફરી call આવે (દા.ત. એક જ action માં
-    // saveSchemes બે વાર ચાલે) તો ડુપ્લિકેટ ફાઇલ ના બને.
-    const sig = raw.length + ':' + Date.now();
-    if(lastBackupSig && (Date.now() - parseInt(lastBackupSig.split(':')[1],10)) < 1500) return;
-    lastBackupSig = sig;
+// ================= Backup: GitHub Cloud Sync (Automatic) =================
+const BACKUP_KEYS = ['mf_schemes_v1'];
+const GH_SETTINGS_KEY = 'ghSyncSettingsV1';
 
-    const payload = { app: 'mf-chopadi-backup', savedAt: new Date().toISOString(), schemes };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const now = new Date();
-    const pad = n=>String(n).padStart(2,'0');
-    const stamp = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+'_'+pad(now.getHours())+'-'+pad(now.getMinutes())+'-'+pad(now.getSeconds());
-    a.href = url;
-    a.download = 'mf-backup-' + stamp + '.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(()=>URL.revokeObjectURL(url), 2000);
-  }catch(e){ /* backup ચૂપચાપ નિષ્ફળ જાય તો પણ app ના flow ને અસર ના થાય */ }
+function collectAllData(){
+  const out = {};
+  BACKUP_KEYS.forEach(k=>{
+    const v = localStorage.getItem(k);
+    if(v !== null) out[k] = v;
+  });
+  return out;
+}
+function restoreAllData(obj){
+  BACKUP_KEYS.forEach(k=>{
+    if(obj[k] !== undefined) localStorage.setItem(k, obj[k]);
+    else localStorage.removeItem(k);
+  });
+}
+function loadGhSettings(){
+  try{ return JSON.parse(localStorage.getItem(GH_SETTINGS_KEY)) || {}; }catch(e){ return {}; }
+}
+function saveGhSettings(s){ localStorage.setItem(GH_SETTINGS_KEY, JSON.stringify(s)); }
+
+const ghOwnerInput = document.getElementById('ghOwner');
+const ghRepoInput = document.getElementById('ghRepo');
+const ghTokenInput = document.getElementById('ghToken');
+const ghPathInput = document.getElementById('ghPath');
+const ghSyncStatus = document.getElementById('ghSyncStatus');
+const GH_DEFAULTS = { owner:'bhavikpeepee02-8966', repo:'Bvkdatabkp', token:'', path:'mf-tracker.json' };
+
+(function initGhFields(){
+  const s = loadGhSettings();
+  ghOwnerInput.value = s.owner || GH_DEFAULTS.owner;
+  ghRepoInput.value = s.repo || GH_DEFAULTS.repo;
+  ghTokenInput.value = s.token || GH_DEFAULTS.token;
+  ghPathInput.value = s.path || GH_DEFAULTS.path;
+})();
+
+function currentGhConfig(){
+  return {
+    owner: ghOwnerInput.value.trim(),
+    repo: ghRepoInput.value.trim(),
+    token: ghTokenInput.value.trim(),
+    path: (ghPathInput.value.trim() || GH_DEFAULTS.path)
+  };
+}
+function setGhStatus(msg, ok){
+  ghSyncStatus.textContent = msg;
+  ghSyncStatus.style.color = ok===true ? 'var(--green)' : (ok===false ? 'var(--red)' : 'var(--ink-soft)');
 }
 
+async function pushToCloud(silent){
+  const cfg = currentGhConfig();
+  if(!cfg.owner || !cfg.repo || !cfg.token || !cfg.path){ if(!silent) setGhStatus('❌ Username, Repo, Token અને ફાઈલ નામ ભરવું જરૂરી છે.', false); return; }
+  saveGhSettings({ owner:cfg.owner, repo:cfg.repo, token:cfg.token, path:cfg.path });
+  if(!silent) setGhStatus('⏳ Save થઈ રહ્યું છે...');
+  try{
+    const dataStr = JSON.stringify(collectAllData());
+    const apiUrl = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${encodeURIComponent(cfg.path)}`;
+    let sha = undefined;
+    const getRes = await fetch(apiUrl, { headers:{ 'Authorization':`token ${cfg.token}`, 'Accept':'application/vnd.github+json' } });
+    if(getRes.status === 200){ const getJson = await getRes.json(); sha = getJson.sha; }
+    else if(getRes.status !== 404){ throw new Error('GitHub read error: '+getRes.status); }
+    const putRes = await fetch(apiUrl, {
+      method:'PUT',
+      headers:{ 'Authorization':`token ${cfg.token}`, 'Accept':'application/vnd.github+json', 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        message: 'Auto backup ' + new Date().toISOString(),
+        content: btoa(unescape(encodeURIComponent(dataStr))),
+        sha
+      })
+    });
+    if(!putRes.ok){ const t = await putRes.text(); throw new Error('GitHub save error: '+putRes.status+' '+t.slice(0,150)); }
+    setGhStatus('✅ Auto-sync થઈ ગયું ('+new Date().toLocaleString('gu-IN')+')', true);
+  }catch(err){
+    setGhStatus('❌ Auto-sync નિષ્ફળ: '+err.message, false);
+  }
+}
+document.getElementById('ghSaveBtn').addEventListener('click', ()=> pushToCloud(false));
+
+let autoSyncTimer = null;
+function scheduleAutoSync(){
+  const s = loadGhSettings();
+  if(!s.owner || !s.repo || !s.token || !s.path) return;
+  clearTimeout(autoSyncTimer);
+  autoSyncTimer = setTimeout(()=> pushToCloud(true), 4000);
+}
+(function watchLocalStorageForAutoSync(){
+  const origSetItem = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = function(key, value){
+    origSetItem(key, value);
+    if(BACKUP_KEYS.indexOf(key) !== -1) scheduleAutoSync();
+  };
+})();
+
+document.getElementById('ghRestoreBtn').addEventListener('click', async ()=>{
+  const cfg = currentGhConfig();
+  if(!cfg.owner || !cfg.repo || !cfg.token || !cfg.path){ setGhStatus('❌ Username, Repo, Token અને ફાઈલ નામ ભરવું જરૂરી છે.', false); return; }
+  if(!confirm('Cloud માંથી Restore કરવાથી આ ફોન પરનો હાલનો ડેટા બદલાઈ જશે. આગળ વધવું છે?')) return;
+  saveGhSettings({ owner:cfg.owner, repo:cfg.repo, token:cfg.token, path:cfg.path });
+  setGhStatus('⏳ Restore થઈ રહ્યું છે...');
+  try{
+    const apiUrl = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${encodeURIComponent(cfg.path)}`;
+    const getRes = await fetch(apiUrl, { headers:{ 'Authorization':`token ${cfg.token}`, 'Accept':'application/vnd.github+json' } });
+    if(getRes.status === 404){ setGhStatus('❌ Cloud પર હજુ કોઈ backup ફાઈલ નથી — પહેલા "Save" કરો.', false); return; }
+    if(!getRes.ok){ throw new Error('GitHub read error: '+getRes.status); }
+    const getJson = await getRes.json();
+    const dataStr = decodeURIComponent(escape(atob(getJson.content.replace(/\n/g,''))));
+    let plainObj;
+    try{ plainObj = JSON.parse(dataStr); }
+    catch(e){ setGhStatus('❌ Cloud પરનો ડેટા વાંચી ના શકાયો.', false); return; }
+    restoreAllData(plainObj);
+    setGhStatus('✅ Restore થઈ ગયું — પેજ ફરી લોડ થાય છે...', true);
+    setTimeout(()=>location.reload(), 900);
+  }catch(err){
+    setGhStatus('❌ Restore નિષ્ફળ: '+err.message, false);
+  }
+});
 </script>
 </body>
 </html>
