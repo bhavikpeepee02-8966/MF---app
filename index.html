@@ -1808,17 +1808,27 @@ async function restoreBackup(file){
   try{
     const text = await file.text();
     const parsed = JSON.parse(text);
-    if(!Array.isArray(parsed)) throw new Error('invalid format');
+    // Two backup formats exist in this app: the manual "⬇️ Backup" button saves a
+    // plain array, while auto-backup saves a wrapped {app, savedAt, schemes} object.
+    // Accept both so files from either source restore correctly.
+    let schemesArr;
+    if(Array.isArray(parsed)){
+      schemesArr = parsed;
+    } else if(parsed && Array.isArray(parsed.schemes)){
+      schemesArr = parsed.schemes;
+    } else {
+      throw new Error('invalid format');
+    }
     const existing = await loadSchemes();
     let ok = true;
     if(existing.length){
-      ok = await showConfirm('હાલનો ડેટા (' + existing.length + ' ફંડ) ડિલીટ થઈને બેકઅપ ફાઈલ (' + parsed.length + ' ફંડ) લોડ થશે. આગળ વધવું છે?');
+      ok = await showConfirm('હાલનો ડેટા (' + existing.length + ' ફંડ) ડિલીટ થઈને બેકઅપ ફાઈલ (' + schemesArr.length + ' ફંડ) લોડ થશે. આગળ વધવું છે?');
     }
     if(!ok) return;
-    await saveSchemes(parsed);
+    await saveSchemes(schemesArr);
     document.getElementById('restore-file-input').value = '';
     await renderDashboardKeepScroll();
-    fetchAllHistoriesAndRender(parsed);
+    fetchAllHistoriesAndRender(schemesArr);
   }catch(e){
     await showAlertM('આ ફાઈલ વાંચી ના શકાયું. સાચી backup JSON ફાઈલ પસંદ કરો.');
   }
