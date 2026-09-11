@@ -448,24 +448,6 @@
       <button class="btn-secondary" style="margin-top:0; width:100%;" onclick="showAmcPopup()">🏢 AMC મુજબ નફો/ખોટ જુઓ</button>
     </div>
 
-    <div class="sync-card">
-      <h3>☁️ GitHub Cloud Sync</h3>
-      <p class="hint">ડેટા તમારા private GitHub repo માં જાય છે. Chrome cache/data clear થાય તો પણ અહીંથી પાછો મેળવી શકાશે. એકવાર ભરીને "Save" કરો — પછી કોઈ પણ ડેટા બદલાય એટલે થોડી સેકન્ડમાં આપોઆપ sync થઈ જશે.</p>
-      <label>GitHub Username</label>
-      <input type="text" id="ghOwner" placeholder="દા.ત. bhavikpeepee02-8966">
-      <label>Repo નામ</label>
-      <input type="text" id="ghRepo" placeholder="દા.ત. Bvkdatabkp">
-      <label>Personal Access Token</label>
-      <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxx">
-      <label>ફાઈલ નામ (repo માં)</label>
-      <input type="text" id="ghPath" placeholder="mf-tracker.json">
-      <div class="row2">
-        <button class="btn-save" id="ghSaveBtn">⬆️ Cloud પર Save કરો</button>
-        <button class="btn-restore" id="ghRestoreBtn">⬇️ Restore કરો</button>
-      </div>
-      <p class="sync-status" id="ghSyncStatus"></p>
-    </div>
-
     <div id="fund-list"></div>
     <div class="empty" id="empty-state">
       હજુ કોઈ ફંડ ઉમેર્યું નથી.<br>ઉપર "ફંડ ઉમેરો" ટેબમાં જઈને પહેલું ફંડ ઉમેરો.
@@ -539,6 +521,24 @@
 
       <button class="btn-block" id="save-fund-btn" onclick="saveFund()">ફંડ ટ્રેકિંગમાં ઉમેરો</button>
       <div id="add-status"></div>
+
+      <div class="sync-card">
+        <h3>☁️ GitHub Cloud Sync</h3>
+        <p class="hint">ડેટા તમારા private GitHub repo માં જાય છે. Chrome cache/data clear થાય તો પણ અહીંથી પાછો મેળવી શકાશે. એકવાર ભરીને "Save" કરો — પછી કોઈ પણ ડેટા બદલાય એટલે થોડી સેકન્ડમાં આપોઆપ sync થઈ જશે.</p>
+        <label>GitHub Username</label>
+        <input type="text" id="ghOwner" placeholder="દા.ત. bhavikpeepee02-8966">
+        <label>Repo નામ</label>
+        <input type="text" id="ghRepo" placeholder="દા.ત. Bvkdatabkp">
+        <label>Personal Access Token</label>
+        <input type="text" id="ghToken" placeholder="ghp_xxxxxxxxxxxx">
+        <label>ફાઈલ નામ (repo માં)</label>
+        <input type="text" id="ghPath" placeholder="mf-tracker.json">
+        <div class="row2">
+          <button class="btn-save" id="ghSaveBtn">⬆️ Cloud પર Save કરો</button>
+          <button class="btn-restore" id="ghRestoreBtn">⬇️ Restore કરો</button>
+        </div>
+        <p class="sync-status" id="ghSyncStatus"></p>
+      </div>
     </div>
   </section>
 
