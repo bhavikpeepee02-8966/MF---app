@@ -204,6 +204,7 @@
   }
   .compare-fund-row .cfr-name{ color:var(--ink); }
   .compare-fund-row .cfr-val{ font-family:'IBM Plex Mono',monospace; text-align:right; }
+  .compare-persist-block{ margin:2px 0 10px; padding:6px 0 0; border-top:1px dashed var(--line); }
 
 
   /* ===== Fund card — ledger entry ===== */
@@ -645,6 +646,19 @@
     </div>
   </div>
 
+  <!-- ============ PERSISTENT COMPARE FUND ADD MODAL ============ -->
+  <div id="cmpadd-overlay" style="display:none; position:fixed; inset:0; background:rgba(20,30,25,0.55); z-index:1000; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:16px; max-width:480px; width:100%; box-shadow:0 12px 30px rgba(0,0,0,0.2); max-height:88vh; overflow-y:auto;">
+      <div style="font-family:'Noto Sans Gujarati',sans-serif; font-weight:700; font-size:15px; color:var(--ink); margin-bottom:10px;">Compare ફંડ ઉમેરો (daily auto-update થશે)</div>
+      <div class="field gu" style="margin-bottom:0;">
+        <input type="text" id="cmpadd-search-input" placeholder="ફંડનું નામ લખો (દા.ત. Motilal Oswal Midcap)">
+      </div>
+      <div class="search-results" id="cmpadd-search-results" style="display:none;"></div>
+      <div id="cmpadd-added-list" style="margin-top:10px;"></div>
+      <button onclick="document.getElementById('cmpadd-overlay').style.display='none'; renderDashboardKeepScroll();" style="margin-top:14px; width:100%; padding:11px; border-radius:9px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font-weight:600; font-family:'Noto Sans Gujarati',sans-serif; font-size:13.5px;">બંધ કરો</button>
+    </div>
+  </div>
+
   <!-- ============ COMPARE SELECTION BAR ============ -->
   <div id="compare-bar" class="compare-bar">
     <span class="cb-text" id="compare-bar-text">0 ફંડ પસંદ કર્યા</span>
@@ -998,11 +1012,110 @@ async function openCompareModal(){
 }
 
 /* =========================================================
-   WHAT-IF — "આ જ તારીખે/રકમે બીજા ફંડમાં રોકાણ કર્યું હોત તો?"
-   Fund A ના actual transactions (તારીખ + રકમ) એ જ, ફક્ત Fund B ની NAV
-   વાપરીને hypothetical units/current value ગણવા — real transaction કંઈ
-   બદલાતું નથી, ફક્ત સરખામણી માટે.
+   PERSISTENT COMPARE FUNDS — "આ ફંડોમાં હોત તો?" કાયમ card પર,
+   દર NAV refresh વખતે આપોઆપ update થાય. scheme.compareFunds = 
+   [{schemeCode, schemeName, hypoValue, lastUpdated}]
    ========================================================= */
+async function openCompareAddModal(sourceId){
+  const overlay = document.getElementById('cmpadd-overlay');
+  const searchInput = document.getElementById('cmpadd-search-input');
+  const resultsBox = document.getElementById('cmpadd-search-results');
+  searchInput.value = '';
+  resultsBox.style.display = 'none';
+  resultsBox.innerHTML = '';
+  overlay.style.display = 'flex';
+  overlay.dataset.sourceId = sourceId;
+  await renderCmpAddedList(sourceId);
+
+  let searchTimer3;
+  searchInput.oninput = (e)=>{
+    clearTimeout(searchTimer3);
+    const q = e.target.value.trim();
+    if(q.length < 3){ resultsBox.style.display='none'; resultsBox.innerHTML=''; return; }
+    searchTimer3 = setTimeout(async ()=>{
+      resultsBox.innerHTML = '<div class="item">શોધી રહ્યા છીએ...</div>';
+      resultsBox.style.display = 'block';
+      try{
+        const results = await searchSchemes(q);
+        if(!results.length){
+          resultsBox.innerHTML = '<div class="item">કંઈ મળ્યું નહીં. બીજું નામ અજમાવો.</div>';
+          return;
+        }
+        resultsBox.innerHTML = results.slice(0,25).map(r=>
+          `<div class="item" data-code="${r.schemeCode}" data-name="${r.schemeName.replace(/"/g,'&quot;')}">
+            ${r.schemeName}<div class="code">Code: ${r.schemeCode}</div>
+          </div>`
+        ).join('');
+        resultsBox.querySelectorAll('.item[data-code]').forEach(el=>{
+          el.addEventListener('click', async ()=>{
+            resultsBox.style.display = 'none';
+            searchInput.value = '';
+            await addCompareFund(sourceId, el.dataset.code, el.dataset.name);
+            await renderCmpAddedList(sourceId);
+          });
+        });
+      }catch(err){
+        resultsBox.innerHTML = '<div class="item">શોધમાં તકલીફ પડી. ઇન્ટરનેટ કનેક્શન ચેક કરો.</div>';
+      }
+    }, 120);
+  };
+}
+
+async function renderCmpAddedList(sourceId){
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===sourceId);
+  const list = (s && s.compareFunds) || [];
+  const box = document.getElementById('cmpadd-added-list');
+  box.innerHTML = list.length
+    ? list.map(cf=> `<div class="compare-fund-row"><span class="cfr-name">${escapeHtml(cf.schemeName)}</span><span class="cfr-val" style="cursor:pointer; color:#D32F2F; font-weight:700;" onclick="removeCompareFund('${sourceId}','${cf.schemeCode}')">✕ કાઢી નાખો</span></div>`).join('')
+    : '<div style="font-size:12px; color:var(--ink-soft); margin-top:6px;">હજુ કોઈ compare ફંડ ઉમેર્યું નથી.</div>';
+}
+
+async function addCompareFund(sourceId, code, name){
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===sourceId);
+  if(!s) return;
+  if(!s.compareFunds) s.compareFunds = [];
+  if(s.compareFunds.some(cf=>cf.schemeCode===code)) return; // પહેલેથી ઉમેરેલું
+  s.compareFunds.push({ schemeCode: code, schemeName: name, hypoValue: null, lastUpdated: null });
+  await saveSchemes(schemes, true);
+  await recomputeCompareFundsFor(s.id); // તરત જ પહેલું value ગણી લેવું
+}
+
+async function removeCompareFund(sourceId, code){
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===sourceId);
+  if(!s || !s.compareFunds) return;
+  s.compareFunds = s.compareFunds.filter(cf=>cf.schemeCode!==code);
+  await saveSchemes(schemes, true);
+  await renderCmpAddedList(sourceId);
+  await renderDashboardKeepScroll();
+}
+
+// scheme ના compareFunds ની hypothetical current value recompute કરવી —
+// NAV refresh વખતે (refreshOneFund/refreshAllFunds) આપોઆપ call થાય છે.
+async function recomputeCompareFundsFor(schemeId){
+  const schemes = await loadSchemes();
+  const s = schemes.find(x=>x.id===schemeId);
+  if(!s || !s.compareFunds || !s.compareFunds.length) return;
+  for(const cf of s.compareFunds){
+    try{
+      const { historyAsc } = await getSchemeHistory(cf.schemeCode);
+      let hypoUnits = 0;
+      (s.transactions||[]).forEach(t=>{
+        const d = parseLocalDate(t.date);
+        const navEntry = findNavOnOrBefore(historyAsc, d) || historyAsc[0];
+        hypoUnits += t.amount / navEntry.nav;
+      });
+      const latest = historyAsc[historyAsc.length-1];
+      cf.hypoValue = hypoUnits * latest.nav;
+      cf.lastUpdated = new Date().toISOString();
+    }catch(e){ /* આ compare ફંડનું NAV ના મળ્યું — જૂનું hypoValue જ રહેવા દેવું */ }
+  }
+  await saveSchemes(schemes, true);
+}
+
+
 async function whatIfCompare(sourceId){
   const overlay = document.getElementById('whatif-overlay');
   const searchInput = document.getElementById('whatif-search-input');
@@ -1109,11 +1222,16 @@ async function runWhatIfCompare(sourceId, destSchemeCode, destSchemeName){
         <span class="cfr-val">${fmtINR(hypoCurrentValue)}</span>
         <span class="cfr-val ${gcH}">${fmtINR(hypoGain)} (${hypoGainPct.toFixed(1)}%)</span>
       </div>
+      <div class="compare-fund-row">
+        <span class="cfr-name">Actual કરતાં ફરક</span>
+        <span class="cfr-val"></span>
+        <span class="cfr-val ${diffIsBetter?'gain':'loss'}" style="font-weight:700;">${diffIsBetter?'+':'-'}${fmtINR(Math.abs(diff))}</span>
+      </div>
       <div style="margin-top:12px; padding:10px 12px; border-radius:9px; background:${diffIsBetter?'rgba(76,175,80,0.1)':'rgba(211,47,47,0.08)'};">
         <b style="color:${diffIsBetter?'var(--green)':'#D32F2F'};">
           ${diffIsBetter
-            ? '👉 ' + escapeHtml(destSchemeName) + ' માં હોત તો ' + fmtINR(Math.abs(diff)) + ' વધારે મળત'
-            : '👉 ' + escapeHtml(s.schemeName) + ' માં રોકાણ કરીને ' + fmtINR(Math.abs(diff)) + ' વધારે ફાયદો થયો'}
+            ? '👉 ' + escapeHtml(destSchemeName) + ' માં હોત તો +' + fmtINR(Math.abs(diff)) + ' વધારે મળત'
+            : '👉 ' + escapeHtml(destSchemeName) + ' માં હોત તો -' + fmtINR(Math.abs(diff)) + ' ઓછું મળત (' + escapeHtml(s.schemeName) + ' માં રહીને ફાયદો થયો)'}
         </b>
       </div>`;
     document.getElementById('whatif-body').innerHTML = body;
@@ -1428,11 +1546,23 @@ async function getAmfiNavMap(){
   if(amfiNavMapCache && (Date.now() - amfiNavMapCache.fetchedAt < 10*60*1000)){
     return amfiNavMapCache.map;
   }
+  const amfiTarget = 'https://www.amfiindia.com/spDownload/NAVAll.txt';
+  const proxyUrls = [
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(amfiTarget),
+    'https://corsproxy.io/?url=' + encodeURIComponent(amfiTarget),
+    'https://thingproxy.freeboard.io/fetch/' + amfiTarget
+  ];
+  let text = null;
+  for(const proxyUrl of proxyUrls){
+    try{
+      const res = await fetch(proxyUrl, {cache:'no-store'});
+      if(!res.ok) continue;
+      const t = await res.text();
+      if(t && t.length > 1000){ text = t; break; } // ટૂંકો/ખાલી જવાબ = ખરેખર fail, આગલો proxy try કરો
+    }catch(e){ /* આ proxy fail — આગલો try કરો */ }
+  }
   try{
-    const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://www.amfiindia.com/spDownload/NAVAll.txt');
-    const res = await fetch(proxyUrl, {cache:'no-store'});
-    if(!res.ok) throw new Error('amfi fetch failed');
-    const text = await res.text();
+    if(!text) throw new Error('all amfi proxies failed');
     const map = {};
     const monthMap = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
     text.split('\n').forEach(line=>{
@@ -1990,6 +2120,14 @@ async function renderDashboard(){
       return days>=365 ? sum + (t.units * scheme.lastNav) : sum;
     }, 0);
 
+    // NAV કેટલી જૂની છે — 4+ દિવસ (weekend/1 holiday કરતાં વધુ) જૂની હોય
+    // તો fetch fail થઈને જૂનું cache બતાવાઈ રહ્યું છે એવી શંકા, વપરાશકર્તાને
+    // સ્પષ્ટ દેખાય એ માટે warning બતાવવી (ચૂપચાપ જૂનું data ના બતાવવું).
+    const navAgeDays = Math.round(daysBetween(new Date(scheme.lastNavDate), new Date()));
+    const staleNavHtml = navAgeDays >= 4
+      ? `<span class="loss" style="font-weight:600;"> ⚠ ${navAgeDays} દિવસ જૂની — refresh કરો</span>`
+      : '';
+
     // SIP ફંડમાં પછીથી Lumpsum ઉમેર્યું હોય તો રોકાણ રકમને SIP વિરુદ્ધ
     // અલગથી ઉમેરેલ (topup) — એમ બે ભાગમાં અલગ બતાવવું.
     let sipBreakdownHtml = '';
@@ -2000,6 +2138,25 @@ async function renderDashboard(){
         sipBreakdownHtml = `<div class="taxfree-line">SIP રોકાણ: <b>${fmtINR(sipInvested)}</b> · અલગથી ઉમેરેલ (Lumpsum): <b>${fmtINR(topupInvested)}</b></div>`;
       }
     }
+
+    // Persistent compare-funds — actual current value ની સાથે diff,
+    // ઓછું હોય તો red/minus, વધુ હોય તો green/plus. X = કાયમ માટે કાઢી નાખો.
+    const compareFundsHtml = (scheme.compareFunds && scheme.compareFunds.length)
+      ? '<div class="compare-persist-block">' + scheme.compareFunds.map(cf=>{
+          if(cf.hypoValue===null || cf.hypoValue===undefined){
+            return `<div class="compare-fund-row"><span class="cfr-name">${escapeHtml(cf.schemeName)}</span><span class="cfr-val">ગણાય છે...</span><span class="cfr-val" style="cursor:pointer;" onclick="removeCompareFund('${scheme.id}','${cf.schemeCode}')">✕</span></div>`;
+          }
+          const diff = cf.hypoValue - m.currentValue;
+          const dc = diff>=0 ? 'gain' : 'loss';
+          const sign = diff>=0 ? '+' : '-';
+          return `<div class="compare-fund-row">
+            <span class="cfr-name">${escapeHtml(cf.schemeName)}</span>
+            <span class="cfr-val">${fmtINR(cf.hypoValue)}</span>
+            <span class="cfr-val ${dc}">${sign}${fmtINR(Math.abs(diff))}</span>
+            <span class="cfr-val" style="cursor:pointer; color:#D32F2F; font-weight:700;" onclick="removeCompareFund('${scheme.id}','${cf.schemeCode}')">✕</span>
+          </div>`;
+        }).join('') + '</div>'
+      : '';
 
     cardsHtml += `
       <div class="fund-card ${stoppedClass}">
@@ -2022,7 +2179,8 @@ async function renderDashboard(){
           <div><div class="lbl">રોકાણ તારીખ</div><div class="val">${earliestDate ? fmtDate(earliestDate) : '—'}</div></div>
           <div><div class="lbl">રોકાણના દિવસો</div><div class="val">${holdingDays!==null ? holdingDays : '—'}</div></div>
         </div>
-        <div class="nav-line">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b></div>
+        <div class="nav-line">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b>${staleNavHtml}</div>
+        ${compareFundsHtml}
         <div class="sparkline-wrap" id="sparkline-${scheme.id}"></div>
         <div class="taxfree-line">ટેક્સ-ફ્રી ઉપાડ યોગ્ય રકમ (1 વર્ષ+): <b>${fmtINR(taxFreeAmount)}</b></div>
         ${sipBreakdownHtml}
@@ -2047,6 +2205,7 @@ async function renderDashboard(){
           ${scheme.sipConfig ? `<button class="danger" onclick="removeSipFromFund('${scheme.id}')">🗑 SIP કાઢો</button>` : ''}
           <button onclick="startTransfer('${scheme.id}')">🔁 ટ્રાન્સફર કરો</button>
           <button onclick="whatIfCompare('${scheme.id}')">🔍 બીજા ફંડમાં હોત તો?</button>
+          <button onclick="openCompareAddModal('${scheme.id}')">📌 Compare ફંડ ઉમેરો (daily)</button>
           <button class="danger" onclick="deleteFund('${scheme.id}')">🗑 કાઢી નાખો</button>
         </div>
       </div>`;
@@ -2440,14 +2599,16 @@ async function refreshOneFund(id){
     }
     resolvePendingTransfersIn(s, historyAsc);
     await saveSchemes(schemes);
+    await recomputeCompareFundsFor(s.id);
     await renderDashboardKeepScroll();
   }catch(e){
     await showAlertM('NAV તાજું કરવામાં તકલીફ પડી. ઇન્ટરનેટ કનેક્શન ચેક કરો.');
   }
 }
 
-async function refreshAllFunds(){
+async function refreshAllFunds(showFailureAlert){
   const schemes = await loadSchemes();
+  const failedNames = [];
   for(const s of schemes){
     try{
       const { historyAsc } = await getSchemeHistory(s.schemeCode);
@@ -2461,10 +2622,18 @@ async function refreshAllFunds(){
         s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
       }
       resolvePendingTransfersIn(s, historyAsc);
-    }catch(e){ console.error('refresh failed for', s.schemeName, e); }
+    }catch(e){ console.error('refresh failed for', s.schemeName, e); failedNames.push(s.schemeName); }
   }
   await saveSchemes(schemes, true); // auto NAV refresh — backup ટ્રિગર નહીં કરવાનું
+  for(const s of schemes){
+    if(s.compareFunds && s.compareFunds.length) await recomputeCompareFundsFor(s.id);
+  }
   await renderDashboardKeepScroll();
+  // manual "Refresh All" બટન દબાવ્યું હોય (auto-poll વખતે નહીં) અને કોઈ
+  // ફંડની NAV fetch ના થઈ હોય તો જ સ્પષ્ટ ચેતવણી — auto-poll ને ચૂપ રાખવી.
+  if(showFailureAlert && failedNames.length){
+    await showAlertM('આ ફંડ્સની NAV તાજી ના થઈ શકી (ઇન્ટરનેટ/proxy તકલીફ): ' + failedNames.join(', '));
+  }
 }
 
 // ટ્રાન્સફર (STP) ની destination બાજુ — જ્યારે NAV હજુ AMFI પર આવી ના હોય
@@ -2614,7 +2783,7 @@ renderDashboard().then(async ()=>{
   const schemes = await loadSchemes();
   if(schemes.length){
     document.getElementById('dash-status').innerHTML = '<div class="status-msg ok" style="margin-bottom:12px;">🔄 તાજા NAV લાવી રહ્યા છીએ...</div>';
-    await refreshAllFunds();
+    await refreshAllFunds(true);
     document.getElementById('dash-status').innerHTML = '';
   }
 });
