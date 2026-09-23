@@ -2152,7 +2152,7 @@ async function renderDashboard(){
           return `<div class="compare-fund-row">
             <span class="cfr-name">${escapeHtml(cf.schemeName)}</span>
             <span class="cfr-val">${fmtINR(cf.hypoValue)}</span>
-            <span class="cfr-val ${dc}">${sign}${fmtINR(Math.abs(diff))}</span>
+            <span class="cfr-val ${dc}" style="font-weight:700; font-size:13.5px;">${sign}${fmtINR(Math.abs(diff))}</span>
             <span class="cfr-val" style="cursor:pointer; color:#D32F2F; font-weight:700;" onclick="removeCompareFund('${scheme.id}','${cf.schemeCode}')">✕</span>
           </div>`;
         }).join('') + '</div>'
@@ -2180,7 +2180,6 @@ async function renderDashboard(){
           <div><div class="lbl">રોકાણના દિવસો</div><div class="val">${holdingDays!==null ? holdingDays : '—'}</div></div>
         </div>
         <div class="nav-line">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b>${staleNavHtml}</div>
-        ${compareFundsHtml}
         <div class="sparkline-wrap" id="sparkline-${scheme.id}"></div>
         <div class="taxfree-line">ટેક્સ-ફ્રી ઉપાડ યોગ્ય રકમ (1 વર્ષ+): <b>${fmtINR(taxFreeAmount)}</b></div>
         ${sipBreakdownHtml}
@@ -2189,6 +2188,7 @@ async function renderDashboard(){
           <div class="h-title">ફંડ હેલ્થ</div>
           <div class="health-row"><span class="h-label">ગણતરી થાય છે...</span></div>
         </div>
+        ${compareFundsHtml}
         <textarea class="comment" data-id="${scheme.id}" onblur="updateComment('${scheme.id}', this.value)" placeholder="નોંધ લખો...">${scheme.comment||''}</textarea>
         <label class="compare-check-wrap">
           <input type="checkbox" class="compare-check" data-id="${scheme.id}" ${selectedForCompare.has(scheme.id)?'checked':''} onchange="toggleCompareSelect('${scheme.id}', this.checked)">
