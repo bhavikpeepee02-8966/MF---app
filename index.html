@@ -198,12 +198,20 @@
     background:var(--green-bg); color:var(--green); font-weight:700; font-size:11.5px;
     font-family:'IBM Plex Mono',monospace; margin-right:6px;
   }
+  .gain{ color:var(--green); }
+  .loss{ color:var(--red); }
   .compare-fund-row{
-    display:grid; grid-template-columns:1fr auto auto; gap:8px; align-items:center;
+    display:grid; grid-template-columns:1fr auto auto auto; gap:8px; align-items:center;
     font-size:11.5px; padding:6px 0; border-top:1px dashed var(--line);
   }
   .compare-fund-row .cfr-name{ color:var(--ink); }
   .compare-fund-row .cfr-val{ font-family:'IBM Plex Mono',monospace; text-align:right; }
+  .compare-fund-row .cfr-val.gain{ color:var(--green); }
+  .compare-fund-row .cfr-val.loss{ color:var(--red); }
+  .compare-fund-row .cfr-remove{
+    color:var(--ink-soft); font-size:14px; padding:2px 6px; cursor:pointer; border-radius:6px;
+  }
+  .compare-fund-row .cfr-remove:active{ background:var(--red-bg); color:var(--red); }
   .compare-persist-block{ margin:2px 0 10px; padding:6px 0 0; border-top:1px dashed var(--line); }
 
 
@@ -1100,6 +1108,20 @@ async function recomputeCompareFundsFor(schemeId){
   if(!s || !s.compareFunds || !s.compareFunds.length) return;
   for(const cf of s.compareFunds){
     try{
+      // આ compare-ફંડ પોતે જ app માં actual (real) ફંડ તરીકે ટ્રેક થતું હોય
+      // (સરખો schemeCode), તો એની પોતાની actual તારીખ/રકમ પ્રમાણેની
+      // real current value જ વાપરવી — "hypothetical" (આ card ના
+      // transactions લગાડીને) નહીં. ફક્ત જે ફંડ app માં ટ્રેક જ ના થતું
+      // હોય, એના માટે જ hypothetical ગણતરી કરવી.
+      const realFund = schemes.find(x=> x.id!==s.id && String(x.schemeCode)===String(cf.schemeCode));
+      if(realFund){
+        const rm = computeSchemeMetrics(realFund);
+        cf.hypoValue = rm.currentValue;
+        cf.isReal = true;
+        cf.lastUpdated = new Date().toISOString();
+        continue;
+      }
+      cf.isReal = false;
       const { historyAsc } = await getSchemeHistory(cf.schemeCode);
       let hypoUnits = 0;
       (s.transactions||[]).forEach(t=>{
@@ -2144,16 +2166,17 @@ async function renderDashboard(){
     const compareFundsHtml = (scheme.compareFunds && scheme.compareFunds.length)
       ? '<div class="compare-persist-block">' + scheme.compareFunds.map(cf=>{
           if(cf.hypoValue===null || cf.hypoValue===undefined){
-            return `<div class="compare-fund-row"><span class="cfr-name">${escapeHtml(cf.schemeName)}</span><span class="cfr-val">ગણાય છે...</span><span class="cfr-val" style="cursor:pointer;" onclick="removeCompareFund('${scheme.id}','${cf.schemeCode}')">✕</span></div>`;
+            return `<div class="compare-fund-row"><span class="cfr-name">${escapeHtml(cf.schemeName)}</span><span class="cfr-val">ગણાય છે...</span><span></span><span class="cfr-val cfr-remove" onclick="removeCompareFund('${scheme.id}','${cf.schemeCode}')">✕</span></div>`;
           }
           const diff = cf.hypoValue - m.currentValue;
           const dc = diff>=0 ? 'gain' : 'loss';
           const sign = diff>=0 ? '+' : '-';
+          const srcTag = cf.isReal ? '✅' : '🔮';
           return `<div class="compare-fund-row">
-            <span class="cfr-name">${escapeHtml(cf.schemeName)}</span>
+            <span class="cfr-name">${srcTag} ${escapeHtml(cf.schemeName)}</span>
             <span class="cfr-val">${fmtINR(cf.hypoValue)}</span>
             <span class="cfr-val ${dc}" style="font-weight:700; font-size:13.5px;">${sign}${fmtINR(Math.abs(diff))}</span>
-            <span class="cfr-val" style="cursor:pointer; color:#D32F2F; font-weight:700;" onclick="removeCompareFund('${scheme.id}','${cf.schemeCode}')">✕</span>
+            <span class="cfr-val cfr-remove" onclick="removeCompareFund('${scheme.id}','${cf.schemeCode}')">✕</span>
           </div>`;
         }).join('') + '</div>'
       : '';
