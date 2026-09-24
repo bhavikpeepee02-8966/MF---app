@@ -1424,33 +1424,42 @@ async function searchSchemes(query){
 // ફંડ્સની હોવાથી session દીઠ 1 વાર (10 મિનિટ cache) જ fetch કરાય છે,
 // દરેક ફંડ માટે અલગ call નથી કરવો પડતો.
 let amfiNavMapCache = null;
+const AMFI_PROXIES = [
+  url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+  url => 'https://corsproxy.io/?' + encodeURIComponent(url),
+  url => 'https://thingproxy.freeboard.io/fetch/' + url
+];
 async function getAmfiNavMap(){
   if(amfiNavMapCache && (Date.now() - amfiNavMapCache.fetchedAt < 10*60*1000)){
     return amfiNavMapCache.map;
   }
-  try{
-    const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://www.amfiindia.com/spDownload/NAVAll.txt');
-    const res = await fetch(proxyUrl, {cache:'no-store'});
-    if(!res.ok) throw new Error('amfi fetch failed');
-    const text = await res.text();
-    const map = {};
-    const monthMap = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-    text.split('\n').forEach(line=>{
-      const parts = line.split(';');
-      if(parts.length < 6) return;
-      const code = parts[0].trim();
-      if(!code || isNaN(Number(code))) return;
-      const nav = parseFloat(parts[4]);
-      if(isNaN(nav)) return;
-      const dm = parts[5].trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
-      if(!dm || monthMap[dm[2]]===undefined) return;
-      map[code] = { nav, date: new Date(parseInt(dm[3],10), monthMap[dm[2]], parseInt(dm[1],10)) };
-    });
-    amfiNavMapCache = { map, fetchedAt: Date.now() };
-    return map;
-  }catch(e){
-    return null; // proxy/AMFI નિષ્ફળ જાય તો ચૂપચાપ null — mfapi.in ડેટા જ વપરાશે
+  const target = 'https://www.amfiindia.com/spDownload/NAVAll.txt';
+  for(const buildProxyUrl of AMFI_PROXIES){
+    try{
+      const res = await fetch(buildProxyUrl(target), {cache:'no-store'});
+      if(!res.ok) throw new Error('amfi fetch failed');
+      const text = await res.text();
+      const map = {};
+      const monthMap = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+      text.split('\n').forEach(line=>{
+        const parts = line.split(';');
+        if(parts.length < 6) return;
+        const code = parts[0].trim();
+        if(!code || isNaN(Number(code))) return;
+        const nav = parseFloat(parts[4]);
+        if(isNaN(nav)) return;
+        const dm = parts[5].trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+        if(!dm || monthMap[dm[2]]===undefined) return;
+        map[code] = { nav, date: new Date(parseInt(dm[3],10), monthMap[dm[2]], parseInt(dm[1],10)) };
+      });
+      if(Object.keys(map).length === 0) throw new Error('empty amfi map');
+      amfiNavMapCache = { map, fetchedAt: Date.now() };
+      return map;
+    }catch(e){
+      continue; // આ proxy નિષ્ફળ ગયો, આગળનો proxy ટ્રાય કરો
+    }
   }
+  return null; // બધા proxy નિષ્ફળ — mfapi.in ડેટા જ વપરાશે
 }
 
 // એક વાર આજની તારીખનું NAV મળી જાય પછી, એ જ દિવસમાં ફરી-ફરી mfapi.in/AMFI
@@ -2022,7 +2031,7 @@ async function renderDashboard(){
           <div><div class="lbl">રોકાણ તારીખ</div><div class="val">${earliestDate ? fmtDate(earliestDate) : '—'}</div></div>
           <div><div class="lbl">રોકાણના દિવસો</div><div class="val">${holdingDays!==null ? holdingDays : '—'}</div></div>
         </div>
-        <div class="nav-line">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b></div>
+        <div class="nav-line">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b>${(()=>{ const d=Math.floor(daysBetween(new Date(scheme.lastNavDate), new Date())); return d>=4 ? ` <span style="color:#c0392b;font-weight:600;">⚠ ${d} દિવસ જૂનું</span>` : ''; })()}</div>
         <div class="sparkline-wrap" id="sparkline-${scheme.id}"></div>
         <div class="taxfree-line">ટેક્સ-ફ્રી ઉપાડ યોગ્ય રકમ (1 વર્ષ+): <b>${fmtINR(taxFreeAmount)}</b></div>
         ${sipBreakdownHtml}
@@ -2448,6 +2457,7 @@ async function refreshOneFund(id){
 
 async function refreshAllFunds(){
   const schemes = await loadSchemes();
+  const failed = [];
   for(const s of schemes){
     try{
       const { historyAsc } = await getSchemeHistory(s.schemeCode);
@@ -2461,10 +2471,13 @@ async function refreshAllFunds(){
         s.transactions = s.transactions.filter(t=>t.source!=='sip').concat(sipTx);
       }
       resolvePendingTransfersIn(s, historyAsc);
-    }catch(e){ console.error('refresh failed for', s.schemeName, e); }
+    }catch(e){ console.error('refresh failed for', s.schemeName, e); failed.push(s.schemeName); }
   }
   await saveSchemes(schemes, true); // auto NAV refresh — backup ટ્રિગર નહીં કરવાનું
   await renderDashboardKeepScroll();
+  if(failed.length){
+    await showAlertM('આ ફંડ્સનું NAV લાવવામાં તકલીફ પડી: ' + failed.join(', ') + '. ઇન્ટરનેટ ચેક કરી ફરી ટ્રાય કરો.');
+  }
 }
 
 // ટ્રાન્સફર (STP) ની destination બાજુ — જ્યારે NAV હજુ AMFI પર આવી ના હોય
