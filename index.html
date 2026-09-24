@@ -1424,6 +1424,18 @@ async function searchSchemes(query){
 // ફંડ્સની હોવાથી session દીઠ 1 વાર (10 મિનિટ cache) જ fetch કરાય છે,
 // દરેક ફંડ માટે અલગ call નથી કરવો પડતો.
 let amfiNavMapCache = null;
+// fetch() ને પોતાની કોઈ time limit નથી — proxy/server જવાબ જ ના આપે (hang)
+// તો આખું refresh કાયમ માટે અટકી જાય ("NAV લાવી રહ્યા છીએ..." ક્યારેય
+// પૂરું ના થાય). એટલે દરેક fetch ને 8 સેકન્ડ પછી આપોઆપ abort/timeout કરવું.
+async function fetchWithTimeout(url, options, timeoutMs){
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=> ctrl.abort(), timeoutMs || 8000);
+  try{
+    return await fetch(url, {...(options||{}), signal: ctrl.signal});
+  }finally{
+    clearTimeout(timer);
+  }
+}
 const AMFI_PROXIES = [
   url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
   url => 'https://corsproxy.io/?url=' + encodeURIComponent(url),
@@ -1437,7 +1449,7 @@ async function getAmfiNavMap(){
   const target = 'https://www.amfiindia.com/spDownload/NAVAll.txt';
   for(const buildProxyUrl of AMFI_PROXIES){
     try{
-      const res = await fetch(buildProxyUrl(target), {cache:'no-store'});
+      const res = await fetchWithTimeout(buildProxyUrl(target), {cache:'no-store'}, 8000);
       if(!res.ok) throw new Error('amfi fetch failed');
       const text = await res.text();
       const map = {};
@@ -1502,7 +1514,7 @@ async function getSchemeHistory(code){
   const cached = readHistCache(String(code));
   if(cached) return cached;
 
-  const res = await fetch('https://api.mfapi.in/mf/' + code, {cache:'no-store'});
+  const res = await fetchWithTimeout('https://api.mfapi.in/mf/' + code, {cache:'no-store'}, 8000);
   if(!res.ok) throw new Error('history fetch failed');
   const data = await res.json();
   // data.data is descending by date; build ascending array with Date objects + numeric nav
@@ -2631,7 +2643,12 @@ renderDashboard().then(async ()=>{
   const schemes = await loadSchemes();
   if(schemes.length){
     document.getElementById('dash-status').innerHTML = '<div class="status-msg ok" style="margin-bottom:12px;">🔄 તાજા NAV લાવી રહ્યા છીએ...</div>';
-    await refreshAllFunds();
+    // per-fetch timeout ઉપરાંત, આખા refresh માટે પણ hard cap — કંઈક
+    // અણધાર્યું hang થાય તો પણ "લાવી રહ્યા છીએ" કાયમ માટે ના અટકે
+    await Promise.race([
+      refreshAllFunds(),
+      new Promise(resolve=> setTimeout(resolve, 45000))
+    ]);
     document.getElementById('dash-status').innerHTML = '';
   }
 });
