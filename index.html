@@ -1477,10 +1477,13 @@ function readHistCache(code){
     const all = JSON.parse(localStorage.getItem(HIST_CACHE_KEY) || '{}');
     const entry = all[code];
     if(!entry || entry.day !== todayStamp()) return null;
-    return {
-      meta: entry.meta,
-      historyAsc: entry.historyAsc.map(h=>({date: new Date(h.date), nav: h.nav}))
-    };
+    const historyAsc = entry.historyAsc.map(h=>({date: new Date(h.date), nav: h.nav}));
+    const latest = historyAsc[historyAsc.length-1];
+    // કાલે cache થયેલું NAV પોતે જ 2+ દિવસ જૂનું હોય તો cache પર ભરોસો ના
+    // કરવો — ફરી fetch કરીને taja NAV મળે છે કે નહીં એ ટ્રાય કરવું (એટલે
+    // proxy/code ફિક્સ થાય એટલે mod-day રાહ જોયા વગર તરત અસર થાય)
+    if(latest && daysBetween(latest.date, new Date()) >= 2) return null;
+    return { meta: entry.meta, historyAsc };
   }catch(e){ return null; }
 }
 function writeHistCache(code, result){
