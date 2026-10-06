@@ -2108,7 +2108,7 @@ function ddHtml(dd){
   if(dd.atPeak){
     return '🎉 અત્યારે <b>સર્વોચ્ચ નફાના સ્તરે</b> છો (નફો ' + fmtINR(dd.now.profit) + ')';
   }
-  return '📉 Peak નફો <b>' + fmtINR(dd.peak.profit) + '</b> (' + fmtDate(toISODate(new Date(dd.peak.t))) + ') થી અત્યારે <b>' + fmtINR(dd.dropAmt) + '</b> (' + dd.dropPct.toFixed(1) + '%) નીચે — <b>' + dd.days + ' દિવસ</b>થી'
+  return '📉 Peak નફો <b>' + fmtINR(dd.peak.profit) + '</b> (' + fmtDate(toISODate(new Date(dd.peak.t))) + ') થી અત્યારે <b>-' + fmtINR(dd.dropAmt) + '</b> (-' + dd.dropPct.toFixed(1) + '%) નીચે — <b>' + dd.days + ' દિવસ</b>થી'
     + '<span class="dd-sub">Peak વખતે કિંમત ' + fmtINR(dd.peak.value) + ' · અત્યારે નફો ' + fmtINR(dd.now.profit) + '</span>';
 }
 function renderDrawdowns(schemes, histories){
