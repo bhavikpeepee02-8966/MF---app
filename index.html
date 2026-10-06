@@ -352,7 +352,8 @@
   .health-note{ font-size:10.5px; color:var(--ink-soft); margin-top:6px; line-height:1.4; }
   .dd-line{ margin:0 0 10px; font-size:12px; line-height:1.5; padding:7px 10px; border-radius:8px; background:var(--red-bg); color:var(--red); }
   .dd-line.ok{ background:var(--green-bg); color:var(--green); }
-  .dd-line b{ font-family:'IBM Plex Mono',monospace; }
+  .dd-line b{ font-family:'IBM Plex Mono',monospace; white-space:nowrap; }
+  .dd-line .nw{ white-space:nowrap; }
   .dd-line .dd-sub{ display:block; color:var(--ink-soft); font-size:11px; }
   .daychange-line{ margin:6px 0 8px; }
   .daychange-line .dc-val{ font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:15px; padding:3px 10px; border-radius:8px; }
@@ -2108,7 +2109,7 @@ function ddHtml(dd){
   if(dd.atPeak){
     return '🎉 અત્યારે <b>સર્વોચ્ચ નફાના સ્તરે</b> છો (નફો ' + fmtINR(dd.now.profit) + ')';
   }
-  return '📉 Peak નફો <b>' + fmtINR(dd.peak.profit) + '</b> (' + fmtDate(toISODate(new Date(dd.peak.t))) + ') થી અત્યારે <b>-' + fmtINR(dd.dropAmt) + '</b> (-' + dd.dropPct.toFixed(1) + '%) નીચે — <b>' + dd.days + ' દિવસ</b>થી'
+  return '📉 Peak નફો <b>' + fmtINR(dd.peak.profit) + '</b> (' + fmtDate(toISODate(new Date(dd.peak.t))) + ') થી અત્યારે <b>-' + fmtINR(dd.dropAmt) + '</b> <span class="nw">(-' + dd.dropPct.toFixed(1) + '%)</span> નીચે — <b>' + dd.days + ' દિવસ</b>થી'
     + '<span class="dd-sub">Peak વખતે કિંમત ' + fmtINR(dd.peak.value) + ' · અત્યારે નફો ' + fmtINR(dd.now.profit) + '</span>';
 }
 function renderDrawdowns(schemes, histories){
