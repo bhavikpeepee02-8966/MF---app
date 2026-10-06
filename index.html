@@ -350,6 +350,10 @@
   .health-row .h-val.neg{ background:var(--red-bg); color:var(--red); }
   .health-row .h-val.neu{ background:#FFF4DE; color:#9A6B00; }
   .health-note{ font-size:10.5px; color:var(--ink-soft); margin-top:6px; line-height:1.4; }
+  .dd-line{ margin:0 0 10px; font-size:12px; line-height:1.5; padding:7px 10px; border-radius:8px; background:var(--red-bg); color:var(--red); }
+  .dd-line.ok{ background:var(--green-bg); color:var(--green); }
+  .dd-line b{ font-family:'IBM Plex Mono',monospace; }
+  .dd-line .dd-sub{ display:block; color:var(--ink-soft); font-size:11px; }
   .daychange-line{ margin:6px 0 8px; }
   .daychange-line .dc-val{ font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:15px; padding:3px 10px; border-radius:8px; }
   .daychange-line .dc-val.pos{ background:var(--green-bg); color:var(--green); }
@@ -410,6 +414,9 @@
           <div class="val" id="s-daychange" style="font-size:22px; font-weight:700;">—</div>
         </div>
         <span class="pill" id="s-daychange-pct">—</span>
+      </div>
+      <div class="card wide" id="s-dd-card" style="border:1.5px solid var(--line); display:none;">
+        <div class="dd-line" id="s-drawdown" style="margin:0; width:100%;"></div>
       </div>
       <div class="card">
         <div class="lbl">કુલ રોકાણ</div>
@@ -525,6 +532,11 @@
         <button class="btn-save" id="ghRestoreBtn">⬇️ Restore કરો</button>
         <button class="btn-restore" id="ghSaveBtn">⬆️ Cloud પર Save કરો</button>
       </div>
+      <div class="row2" style="margin-top:10px">
+        <button class="btn-save" id="jsonExportBtn">📤 JSON Export</button>
+        <button class="btn-restore" id="jsonImportBtn">📥 JSON Import</button>
+      </div>
+      <input type="file" id="jsonImportFile" accept=".json,application/json" style="display:none">
       <p class="sync-status" id="ghSyncStatus"></p>
     </div>
   </section>
@@ -1937,6 +1949,7 @@ async function renderDashboard(){
         <div class="nav-line">NAV: <b>₹${scheme.lastNav.toFixed(2)}</b> · તારીખ: <b>${fmtDate(scheme.lastNavDate)}</b>${staleWarn}</div>
         <div class="sparkline-wrap" id="sparkline-${scheme.id}"></div>
         <div class="taxfree-line">ટેક્સ-ફ્રી ઉપાડ યોગ્ય રકમ (1 વર્ષ+): <b>${fmtINR(taxFreeAmount)}</b></div>
+        <div class="dd-line" id="dd-${scheme.id}" style="display:none;"></div>
         ${sipBreakdownHtml}
         <div class="daychange-line" id="daychange-${scheme.id}"><span style="color:var(--ink-soft); font-size:11.5px;">આજનો ફેરફાર ગણાય છે...</span></div>
         <div class="health-block" id="health-${scheme.id}">
@@ -2038,6 +2051,86 @@ async function fetchAllHistoriesAndRender(schemes){
   renderFundHealthAll(schemes, histories).catch(e=>console.error('fund health failed', e));
   renderDayChanges(schemes, histories);
   renderSparklines(schemes, histories);
+  try{ renderDrawdowns(schemes, histories); }catch(e){ console.error('drawdown failed', e); }
+}
+
+
+/* =========================================================
+   PEAK થી ઘટાડો (DRAWDOWN) — કુલ પોર્ટફોલિયો + દરેક ફંડ
+   નફો (Profit) = કિંમત − રોકાણ, એટલે નવું રોકાણ ઉમેરવાથી ગણતરી ખોટી નથી પડતી
+   ========================================================= */
+function computeDrawdown(schemeList, histories){
+  const items = [];
+  schemeList.forEach(sc=>{
+    const hist = histories[sc.id];
+    if(!hist || !hist.length) return;
+    const txs = sc.transactions
+      .filter(t=> t.date && !(t.status==='pending'))
+      .map(t=>({ d: parseLocalDate(t.date).getTime(), amount:t.amount, units:t.units }))
+      .sort((a,b)=>a.d-b.d);
+    if(!txs.length) return;
+    items.push({ hist, txs, ptr:0, units:0, invested:0, lastNav:null });
+  });
+  if(!items.length) return null;
+
+  const dateSet = new Set();
+  items.forEach(it=>{
+    const start = it.txs[0].d;
+    it.hist.forEach(h=>{ const t = h.date.getTime(); if(t>=start) dateSet.add(t); });
+  });
+  const dates = Array.from(dateSet).sort((a,b)=>a-b);
+  if(dates.length<2) return null;
+
+  const hPtr = items.map(()=>0);
+  let best = null, last = null;
+  for(const t of dates){
+    let value = 0, invested = 0;
+    items.forEach((it, i)=>{
+      while(hPtr[i] < it.hist.length && it.hist[hPtr[i]].date.getTime() <= t){ it.lastNav = it.hist[hPtr[i]].nav; hPtr[i]++; }
+      while(it.ptr < it.txs.length && it.txs[it.ptr].d <= t){ it.units += it.txs[it.ptr].units; it.invested += it.txs[it.ptr].amount; it.ptr++; }
+      if(it.lastNav!==null){ value += it.units * it.lastNav; }
+      invested += it.invested;
+    });
+    if(invested <= 0 && value <= 0) continue;
+    const profit = value - invested;
+    last = { t, value, invested, profit };
+    if(!best || profit >= best.profit) best = last;
+  }
+  if(!best || !last) return null;
+  const dropAmt = best.profit - last.profit;
+  const base = best.value > 0 ? best.value : 0;
+  const dropPct = base>0 ? (dropAmt/base*100) : 0;
+  const days = Math.round((last.t - best.t)/(1000*60*60*24));
+  return { peak:best, now:last, dropAmt, dropPct, days, atPeak: dropAmt <= 0.5 };
+}
+function ddHtml(dd){
+  if(!dd) return '';
+  if(dd.atPeak){
+    return '🎉 અત્યારે <b>સર્વોચ્ચ નફાના સ્તરે</b> છો (નફો ' + fmtINR(dd.now.profit) + ')';
+  }
+  return '📉 Peak નફો <b>' + fmtINR(dd.peak.profit) + '</b> (' + fmtDate(toISODate(new Date(dd.peak.t))) + ') થી અત્યારે <b>' + fmtINR(dd.dropAmt) + '</b> (' + dd.dropPct.toFixed(1) + '%) નીચે — <b>' + dd.days + ' દિવસ</b>થી'
+    + '<span class="dd-sub">Peak વખતે કિંમત ' + fmtINR(dd.peak.value) + ' · અત્યારે નફો ' + fmtINR(dd.now.profit) + '</span>';
+}
+function renderDrawdowns(schemes, histories){
+  const tot = computeDrawdown(schemes, histories);
+  const card = document.getElementById('s-dd-card');
+  const el = document.getElementById('s-drawdown');
+  if(card && el){
+    if(tot){
+      el.innerHTML = '<b style="font-family:inherit;">કુલ પોર્ટફોલિયો:</b> ' + ddHtml(tot);
+      el.className = 'dd-line' + (tot.atPeak ? ' ok' : '');
+      card.style.display = '';
+    } else { card.style.display = 'none'; }
+  }
+  schemes.forEach(sc=>{
+    const e = document.getElementById('dd-'+sc.id);
+    if(!e) return;
+    const dd = computeDrawdown([sc], histories);
+    if(!dd){ e.style.display='none'; return; }
+    e.innerHTML = ddHtml(dd);
+    e.className = 'dd-line' + (dd.atPeak ? ' ok' : '');
+    e.style.display = '';
+  });
 }
 
 function computeDayChange(historyAsc, totalUnits){
@@ -2604,16 +2697,24 @@ function setGhStatus(msg, ok){
   ghSyncStatus.style.color = ok===true ? 'var(--green)' : (ok===false ? 'var(--red)' : 'var(--ink-soft)');
 }
 
+
+async function fetchCloudRaw(cfg){
+  const apiUrl = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${encodeURIComponent(cfg.path)}?t=${Date.now()}`;
+  const res = await fetch(apiUrl, { cache:'no-store', headers:{ 'Authorization':`token ${cfg.token}`, 'Accept':'application/vnd.github.raw+json' } });
+  return res;
+}
 async function pushToCloud(silent){
   const cfg = currentGhConfig();
   if(!cfg.owner || !cfg.repo || !cfg.token || !cfg.path){ if(!silent) setGhStatus('❌ Username, Repo, Token અને ફાઈલ નામ ભરવું જરૂરી છે.', false); return; }
   saveGhSettings({ owner:cfg.owner, repo:cfg.repo, token:cfg.token, path:cfg.path });
   if(!silent) setGhStatus('⏳ Save થઈ રહ્યું છે...');
   try{
-    const dataStr = JSON.stringify(collectAllData());
+    const allData = collectAllData();
+    if(silent){ try{ const arr = JSON.parse(allData['mf_schemes_v1']||'[]'); if(!arr.length) return; }catch(e){} }
+    const dataStr = JSON.stringify(allData);
     const apiUrl = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${encodeURIComponent(cfg.path)}`;
     let sha = undefined;
-    const getRes = await fetch(apiUrl, { headers:{ 'Authorization':`token ${cfg.token}`, 'Accept':'application/vnd.github+json' } });
+    const getRes = await fetch(apiUrl+'?t='+Date.now(), { cache:'no-store', headers:{ 'Authorization':`token ${cfg.token}`, 'Accept':'application/vnd.github+json' } });
     if(getRes.status === 200){ const getJson = await getRes.json(); sha = getJson.sha; }
     else if(getRes.status !== 404){ throw new Error('GitHub read error: '+getRes.status); }
     const putRes = await fetch(apiUrl, {
@@ -2653,23 +2754,74 @@ document.getElementById('ghRestoreBtn').addEventListener('click', async ()=>{
   if(!cfg.owner || !cfg.repo || !cfg.token || !cfg.path){ setGhStatus('❌ Username, Repo, Token અને ફાઈલ નામ ભરવું જરૂરી છે.', false); return; }
   if(!confirm('Cloud માંથી Restore કરવાથી આ ફોન પરનો હાલનો ડેટા બદલાઈ જશે. આગળ વધવું છે?')) return;
   saveGhSettings({ owner:cfg.owner, repo:cfg.repo, token:cfg.token, path:cfg.path });
+  clearTimeout(autoSyncTimer);
   setGhStatus('⏳ Restore થઈ રહ્યું છે...');
   try{
-    const apiUrl = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${encodeURIComponent(cfg.path)}`;
-    const getRes = await fetch(apiUrl, { headers:{ 'Authorization':`token ${cfg.token}`, 'Accept':'application/vnd.github+json' } });
-    if(getRes.status === 404){ setGhStatus('❌ Cloud પર હજુ કોઈ backup ફાઈલ નથી — પહેલા "Save" કરો.', false); return; }
+    const getRes = await fetchCloudRaw(cfg);
+    if(getRes.status === 404){ setGhStatus('❌ ફાઈલ મળી નથી (404) — Username / Repo / ફાઈલ નામ ચેક કરો, અથવા પહેલા "Save" કરો.', false); return; }
+    if(getRes.status === 401){ setGhStatus('❌ Token ખોટો અથવા expire થઈ ગયો છે (401). નવો Token બનાવો.', false); return; }
+    if(getRes.status === 403){ setGhStatus('❌ Token ને પરવાનગી નથી (403) — Token માં "Contents: Read" permission જોઈએ.', false); return; }
     if(!getRes.ok){ throw new Error('GitHub read error: '+getRes.status); }
-    const getJson = await getRes.json();
-    const dataStr = decodeURIComponent(escape(atob(getJson.content.replace(/\n/g,''))));
+    const dataStr = await getRes.text();
     let plainObj;
     try{ plainObj = JSON.parse(dataStr); }
-    catch(e){ setGhStatus('❌ Cloud પરનો ડેટા વાંચી ના શકાયો.', false); return; }
-    restoreAllData(plainObj);
-    setGhStatus('✅ Restore થઈ ગયું — પેજ ફરી લોડ થાય છે...', true);
-    setTimeout(()=>location.reload(), 900);
+    catch(e){ setGhStatus('❌ Cloud પરનો ડેટા વાંચી ના શકાયો (JSON ખરાબ છે).', false); return; }
+    if(!plainObj || typeof plainObj !== 'object' || plainObj['mf_schemes_v1'] === undefined){
+      setGhStatus('❌ Cloud ફાઈલમાં ફંડનો ડેટા નથી — હાલનો ડેટા બદલ્યો નથી.', false); return;
+    }
+    let cnt = 0; try{ cnt = JSON.parse(plainObj['mf_schemes_v1']).length; }catch(e){}
+    const origSet = Storage.prototype.setItem;
+    BACKUP_KEYS.forEach(k=>{ if(plainObj[k] !== undefined) origSet.call(localStorage, k, plainObj[k]); });
+    setGhStatus('✅ Restore થઈ ગયું ('+cnt+' ફંડ) — પેજ ફરી લોડ થાય છે...', true);
+    setTimeout(()=>location.reload(), 1200);
   }catch(err){
     setGhStatus('❌ Restore નિષ્ફળ: '+err.message, false);
   }
+});
+
+/* JSON EXPORT / IMPORT (ફોનમાં ફાઈલ તરીકે) */
+document.getElementById('jsonExportBtn').addEventListener('click', ()=>{
+  try{
+    const data = collectAllData();
+    if(!data['mf_schemes_v1']){ setGhStatus('❌ Export કરવા માટે કોઈ ડેટા નથી.', false); return; }
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    const d = new Date();
+    const pad = n=> String(n).padStart(2,'0');
+    const name = 'mf-tracker-backup-'+d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'.json';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    setGhStatus('✅ Export થઈ ગયું: '+name, true);
+  }catch(err){ setGhStatus('❌ Export નિષ્ફળ: '+err.message, false); }
+});
+document.getElementById('jsonImportBtn').addEventListener('click', ()=>{
+  document.getElementById('jsonImportFile').click();
+});
+document.getElementById('jsonImportFile').addEventListener('change', (e)=>{
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      let obj = JSON.parse(reader.result);
+      let schemesStr;
+      if(Array.isArray(obj)) schemesStr = JSON.stringify(obj);
+      else if(obj && obj['mf_schemes_v1'] !== undefined) schemesStr = (typeof obj['mf_schemes_v1']==='string') ? obj['mf_schemes_v1'] : JSON.stringify(obj['mf_schemes_v1']);
+      else { setGhStatus('❌ આ ફાઈલમાં ફંડનો ડેટા નથી — હાલનો ડેટા બદલ્યો નથી.', false); return; }
+      const arr = JSON.parse(schemesStr);
+      if(!Array.isArray(arr)){ setGhStatus('❌ ફાઈલનું ફોર્મેટ ખોટું છે.', false); return; }
+      if(!confirm('Import કરવાથી આ ફોન પરનો હાલનો ડેટા ('+arr.length+' ફંડ સાથે) બદલાઈ જશે. આગળ વધવું છે?')) return;
+      clearTimeout(autoSyncTimer);
+      Storage.prototype.setItem.call(localStorage, 'mf_schemes_v1', schemesStr);
+      setGhStatus('✅ Import થઈ ગયું ('+arr.length+' ફંડ) — પેજ ફરી લોડ થાય છે...', true);
+      setTimeout(()=>location.reload(), 1200);
+    }catch(err){ setGhStatus('❌ Import નિષ્ફળ: ફાઈલ વાંચી ના શકાઈ.', false); }
+  };
+  reader.onerror = ()=> setGhStatus('❌ ફાઈલ ખોલી ના શકાઈ.', false);
+  reader.readAsText(file);
 });
 </script>
 </body>
