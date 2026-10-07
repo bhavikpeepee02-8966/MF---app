@@ -1777,18 +1777,27 @@ async function matchUnitsToActual(schemeId){
   const diff = target - currentTotal;
   if(Math.abs(diff) < 0.0000001){ await showAlertM('પહેલેથી જ મેચ થાય છે — ફેરફારની જરૂર નથી.'); return; }
 
-  let latestIdx = -1;
-  s.transactions.forEach((t,i)=>{
-    if(t.units>0 && (latestIdx===-1 || t.date > s.transactions[latestIdx].date)) latestIdx = i;
-  });
-  if(latestIdx===-1) latestIdx = s.transactions.length-1;
+  // ફરક મોટો હોય તો કદાચ કોઈ ખરીદી એન્ટ્રી બાકી છે અથવા broker માં હજી units આવ્યા નથી — ખોટી જગ્યાએ ફરક ન બેસે એટલે અટકાવો
+  if(Math.abs(diff)/currentTotal > 0.02){
+    await showAlertM('ફરક મોટો છે (' + diff.toFixed(3) + ' units, ' + (diff/currentTotal*100).toFixed(1) + '%). કદાચ કોઈ ખરીદી એન્ટ્રી ઉમેરવાની બાકી છે, અથવા broker માં નવી ખરીદીના units હજી આવ્યા નથી. પહેલા બધી એન્ટ્રી ચેક કરો, પછી ફરી મેચ કરો. કોઈ ફેરફાર કર્યો નથી.');
+    return;
+  }
 
-  s.transactions[latestIdx].units = s.transactions[latestIdx].units + diff;
-  if(s.transactions[latestIdx].units < 0) s.transactions[latestIdx].units = 0;
+  // ફરક બધી ખરીદી એન્ટ્રીમાં પ્રમાણસર વહેંચો (છેલ્લી એન્ટ્રીમાં નહીં), જેથી કોઈ એક તારીખ બગડે નહીં
+  let posSum = 0, negSum = 0;
+  s.transactions.forEach(t=>{ if(t.units>0) posSum += t.units; else negSum += t.units; });
+  const factor = (target - negSum) / posSum;
+  if(!(factor>0) || !isFinite(factor)){ await showAlertM('આ Units સાથે મેચ થઈ શકતું નથી.'); return; }
+  s.transactions.forEach(t=>{
+    if(t.units>0){
+      t.units = t.units * factor;
+      if(t.amount>0) t.nav = t.amount / t.units;
+    }
+  });
 
   await saveSchemes(schemes);
   await renderDashboardKeepScroll();
-  await showAlertM('થઈ ગયું — કુલ Units હવે ' + target.toFixed(3) + ' છે (ફેરફાર ' + (latestIdx+1) + 'મી એન્ટ્રીમાં કરવામાં આવ્યો).');
+  await showAlertM('થઈ ગયું — કુલ Units હવે ' + target.toFixed(3) + ' છે (ફરક બધી એન્ટ્રીમાં પ્રમાણસર વહેંચ્યો).');
 }
 
 async function changeSchemeCode(schemeId){
