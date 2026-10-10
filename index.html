@@ -9,6 +9,7 @@
 <link rel="apple-touch-icon" href="./icon-192.png">
 <meta name="theme-color" content="#4CAF50">
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700;900&family=Noto+Sans+Gujarati:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -1376,43 +1377,54 @@ const AMFI_PROXIES = [
   url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url),
   url => 'https://thingproxy.freeboard.io/fetch/' + url
 ];
+let amfiFailedAt = 0;
+function parseAmfiText(text){
+  const map = {};
+  const monthMap = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  text.split('\n').forEach(line=>{
+    const parts = line.split(';');
+    if(parts.length < 6) return;
+    const code = parts[0].trim();
+    if(!code || isNaN(Number(code))) return;
+    const nav = parseFloat(parts[4]);
+    if(isNaN(nav)) return;
+    const dm = parts[5].trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+    if(!dm || monthMap[dm[2]]===undefined) return;
+    map[code] = { nav, date: new Date(parseInt(dm[3],10), monthMap[dm[2]], parseInt(dm[1],10)) };
+  });
+  return map;
+}
 async function getAmfiNavMap(){
   if(amfiNavMapCache && (Date.now() - amfiNavMapCache.fetchedAt < 10*60*1000)){
     return amfiNavMapCache.map;
   }
   if(amfiFetchPromise) return amfiFetchPromise;
+  // છેલ્લી વાર નિષ્ફળ ગયું હોય તો 3 મિનિટ સુધી ફરી ટ્રાય ન કરો (દરેક ફંડ માટે રાહ ન જોવી પડે)
+  if(Date.now() - amfiFailedAt < 3*60*1000) return null;
   amfiFetchPromise = (async ()=>{
     const target = 'https://www.amfiindia.com/spDownload/NAVAll.txt';
-    for(const buildProxyUrl of AMFI_PROXIES){
-      try{
-        const res = await fetchWithTimeout(buildProxyUrl(target), {cache:'no-store'}, 45000);
-        if(!res.ok) throw new Error('amfi fetch failed');
-        const text = await res.text();
-        const map = {};
-        const monthMap = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-        text.split('\n').forEach(line=>{
-          const parts = line.split(';');
-          if(parts.length < 6) return;
-          const code = parts[0].trim();
-          if(!code || isNaN(Number(code))) return;
-          const nav = parseFloat(parts[4]);
-          if(isNaN(nav)) return;
-          const dm = parts[5].trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
-          if(!dm || monthMap[dm[2]]===undefined) return;
-          map[code] = { nav, date: new Date(parseInt(dm[3],10), monthMap[dm[2]], parseInt(dm[1],10)) };
-        });
-        if(Object.keys(map).length === 0) throw new Error('empty amfi map');
-        amfiNavMapCache = { map, fetchedAt: Date.now() };
-        return map;
-      }catch(e){
-        continue;
-      }
+    let finished = false;
+    const tryOne = async (buildProxyUrl, idx)=>{
+      if(idx>0){ await new Promise(r=> setTimeout(r, idx*1500)); if(finished) throw new Error('skipped'); }
+      const res = await fetchWithTimeout(buildProxyUrl(target), {cache:'no-store'}, 15000);
+      if(!res.ok) throw new Error('amfi fetch failed');
+      const map = parseAmfiText(await res.text());
+      if(Object.keys(map).length === 0) throw new Error('empty amfi map');
+      return map;
+    };
+    try{
+      const map = await Promise.any(AMFI_PROXIES.map(tryOne));
+      finished = true;
+      amfiNavMapCache = { map, fetchedAt: Date.now() };
+      return map;
+    }catch(e){
+      finished = true;
+      amfiFailedAt = Date.now();
+      return null;
     }
-    return null;
   })();
   try{
-    const result = await amfiFetchPromise;
-    return result;
+    return await amfiFetchPromise;
   }finally{
     amfiFetchPromise = null;
   }
@@ -1426,27 +1438,53 @@ function todayStamp(){
   const d = new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
+let histDisk = null;
+const histMem = {};
+function loadHistDisk(){
+  if(histDisk) return histDisk;
+  try{ histDisk = JSON.parse(localStorage.getItem(HIST_CACHE_KEY) || '{}'); }catch(e){ histDisk = {}; }
+  return histDisk;
+}
+function histFresh(day, historyAsc){
+  if(day !== todayStamp()) return false;
+  const latest = historyAsc[historyAsc.length-1];
+  if(latest && daysBetween(latest.date, new Date()) >= 4) return false;
+  return true;
+}
 function readHistCache(code){
   try{
-    const all = JSON.parse(localStorage.getItem(HIST_CACHE_KEY) || '{}');
-    const entry = all[code];
-    if(!entry || entry.day !== todayStamp()) return null;
+    const m = histMem[code];
+    if(m){
+      if(histFresh(m.day, m.historyAsc)) return { meta: m.meta, historyAsc: m.historyAsc.slice() };
+      delete histMem[code];
+    }
+    const entry = loadHistDisk()[code];
+    if(!entry) return null;
     const historyAsc = entry.historyAsc.map(h=>({date: new Date(h.date), nav: h.nav}));
-    const latest = historyAsc[historyAsc.length-1];
-    if(latest && daysBetween(latest.date, new Date()) >= 4) return null;
-    return { meta: entry.meta, historyAsc };
+    if(!histFresh(entry.day, historyAsc)) return null;
+    histMem[code] = { day: entry.day, meta: entry.meta, historyAsc };
+    return { meta: entry.meta, historyAsc: historyAsc.slice() };
   }catch(e){ return null; }
 }
+let histSaveTimer = null;
 function writeHistCache(code, result){
   try{
-    const all = JSON.parse(localStorage.getItem(HIST_CACHE_KEY) || '{}');
-    all[code] = {
+    histMem[code] = { day: todayStamp(), meta: result.meta, historyAsc: result.historyAsc };
+    const disk = loadHistDisk();
+    disk[code] = {
       day: todayStamp(),
       meta: result.meta,
       historyAsc: result.historyAsc.map(h=>({date: h.date.getTime(), nav: h.nav}))
     };
-    localStorage.setItem(HIST_CACHE_KEY, JSON.stringify(all));
+    clearTimeout(histSaveTimer);
+    histSaveTimer = setTimeout(()=>{ try{ localStorage.setItem(HIST_CACHE_KEY, JSON.stringify(disk)); }catch(e){} }, 2000);
   }catch(e){ }
+}
+// ફંડ્સની હિસ્ટ્રી 3-3 ની ટુકડીમાં લાવો (એક પછી એક નહીં, બધા એકસાથે પણ નહીં)
+async function prefetchHistories(schemes){
+  for(let i=0;i<schemes.length;i+=3){
+    await Promise.all(schemes.slice(i,i+3).map(s=> getSchemeHistory(s.schemeCode).catch(()=>null)));
+  }
 }
 
 async function getSchemeHistory(code){
@@ -2051,12 +2089,13 @@ function renderSparklines(schemes, histories){
 
 async function fetchAllHistoriesAndRender(schemes){
   const histories = {};
-  // એક-એક કરીને (sequential) — ધીમા network પર parallel નુકસાનકારક
-  for(const s of schemes){
-    try{
-      const { historyAsc } = await getSchemeHistory(s.schemeCode);
-      histories[s.id] = historyAsc;
-    }catch(e){ histories[s.id] = null; }
+  for(let i=0;i<schemes.length;i+=3){
+    await Promise.all(schemes.slice(i,i+3).map(async s=>{
+      try{
+        const { historyAsc } = await getSchemeHistory(s.schemeCode);
+        histories[s.id] = historyAsc;
+      }catch(e){ histories[s.id] = null; }
+    }));
   }
   renderFundHealthAll(schemes, histories).catch(e=>console.error('fund health failed', e));
   renderDayChanges(schemes, histories);
@@ -2451,11 +2490,20 @@ async function refreshOneFund(id){
    REFRESH ALL — એક-એક કરીને (SEQUENTIAL), retry, progress bar
    ધીમા 4G પર parallel નુકસાનકારક — દરેકને આખું bandwidth મળે
    ========================================================= */
+let refreshRunning = false, lastRefreshAt = 0;
 async function refreshAllFunds(){
+  if(refreshRunning) return;
+  refreshRunning = true;
+  try{ await refreshAllFundsInner(); }
+  finally{ refreshRunning = false; lastRefreshAt = Date.now(); }
+}
+async function refreshAllFundsInner(){
   const schemes = await loadSchemes();
   const failed = [];
   const total = schemes.length;
   let done = 0;
+
+  await prefetchHistories(schemes);
 
   for(const s of schemes){
     const statusEl = document.getElementById('dash-status');
@@ -2490,8 +2538,8 @@ async function refreshAllFunds(){
       failed.push(s.schemeName + ' [' + ((lastErr && lastErr.message) || String(lastErr)) + ']');
     }
     done++;
-    await saveSchemes(schemes, true);
   }
+  await saveSchemes(schemes, true);
 
   await renderDashboardKeepScroll();
   if(failed.length){
@@ -2645,9 +2693,10 @@ renderDashboard().then(async ()=>{
 
 let autoRefreshTimer = null;
 function silentAutoRefresh(){
+  if(refreshRunning || (Date.now() - lastRefreshAt) < 9*60*1000) return;
   loadSchemes().then(schemes=>{
     if(!schemes.length) return;
-    refreshAllFunds().then(()=> renderDashboardKeepScroll());
+    refreshAllFunds();
   });
 }
 document.addEventListener('visibilitychange', ()=>{
@@ -2819,6 +2868,7 @@ document.getElementById('jsonImportFile').addEventListener('change', (e)=>{
       let obj = JSON.parse(reader.result);
       let schemesStr;
       if(Array.isArray(obj)) schemesStr = JSON.stringify(obj);
+      else if(obj && Array.isArray(obj.schemes)) schemesStr = JSON.stringify(obj.schemes);
       else if(obj && obj['mf_schemes_v1'] !== undefined) schemesStr = (typeof obj['mf_schemes_v1']==='string') ? obj['mf_schemes_v1'] : JSON.stringify(obj['mf_schemes_v1']);
       else { setGhStatus('❌ આ ફાઈલમાં ફંડનો ડેટા નથી — હાલનો ડેટા બદલ્યો નથી.', false); return; }
       const arr = JSON.parse(schemesStr);
